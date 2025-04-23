@@ -1,0 +1,34 @@
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from config import Config
+
+db = SQLAlchemy()
+migrate = Migrate()
+
+def create_app(config_class=Config):
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+    
+    # Initialize extensions
+    db.init_app(app)
+    migrate.init_app(app, db)
+    
+    # Register main blueprint
+    # Blueprint-Import in der Funktion, um zirkuläre Imports zu vermeiden
+    from app.routes import main
+    app.register_blueprint(main)
+    
+    # Register modules
+    from app.modules.timeseries import bp as timeseries_bp
+    app.register_blueprint(timeseries_bp, url_prefix='/timeseries')
+    
+    # Register costincome module
+    from app.modules.costincome import bp as costincome_bp
+    app.register_blueprint(costincome_bp, url_prefix='/costincome')
+    
+    # Create database tables - only needed for development
+    with app.app_context():
+        db.create_all()
+    
+    return app

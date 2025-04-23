@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - Neuer Eintrag{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-light">
+                <h2 class="mb-0">Neuen Eintrag hinzufügen</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('costincome.add') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Typ</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="type" id="type-income" value="income" checked>
+                            <label class="form-check-label text-success" for="type-income">
+                                <i class="fas fa-arrow-down me-1"></i>Einnahme
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="type" id="type-outcome" value="outcome">
+                            <label class="form-check-label text-danger" for="type-outcome">
+                                <i class="fas fa-arrow-up me-1"></i>Ausgabe
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Neues Datumsfeld -->
+                    <div class="mb-3">
+                        <label for="entry_date" class="form-label">Datum</label>
+                        <input type="date" class="form-control" id="entry_date" name="entry_date" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="amount" class="form-label">Betrag (€)</label>
+                        <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Kategorie</label>
+                        <select class="form-select" id="category" name="category" required>
+                            <option value="" selected disabled>Kategorie auswählen</option>
+                            <!-- Einnahmen Kategorien -->
+                            <optgroup label="Einnahmen" id="income-categories">
+                                <option value="Gehalt">Gehalt</option>
+                                <option value="Bonus">Bonus</option>
+                                <option value="Rückerstattung">Rückerstattung</option>
+                                <option value="Investitionen">Investitionen</option>
+                                <option value="Verkauf">Verkauf</option>
+                                <option value="Sonstiges Einkommen">Sonstiges Einkommen</option>
+                            </optgroup>
+                            <!-- Ausgaben Kategorien -->
+                            <optgroup label="Ausgaben" id="outcome-categories">
+                                <option value="Lebensmittel">Lebensmittel</option>
+                                <option value="Wohnen">Wohnen</option>
+                                <option value="Transport">Transport</option>
+                                <option value="Versicherungen">Versicherungen</option>
+                                <option value="Gesundheit">Gesundheit</option>
+                                <option value="Bildung">Bildung</option>
+                                <option value="Freizeit">Freizeit</option>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Reisen">Reisen</option>
+                                <option value="Essen gehen">Essen gehen</option>
+                                <option value="Werkstatt">Werkstatt</option>
+                                <option value="Energie">Energie</option>
+                                <option value="Kreditkarte">Kreditkarte</option>
+                                <option value="Internet/Mobile">Internet/Mobile</option>
+                                <option value="Sonstige Ausgaben">Sonstige Ausgaben</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Beschreibung (optional)</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('costincome.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Zurück
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Speichern
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default date to today
+    const today = new Date();
+    const formattedDate = today.toISOString().substr(0, 10);
+    document.getElementById('entry_date').value = formattedDate;
+    
+    // Function to filter categories based on selected type
+    function filterCategories() {
+        const typeIncome = document.getElementById('type-income');
+        const incomeCategories = document.getElementById('income-categories');
+        const outcomeCategories = document.getElementById('outcome-categories');
+        
+        if (typeIncome.checked) {
+            incomeCategories.style.display = 'block';
+            outcomeCategories.style.display = 'none';
+            // Select first income category
+            const firstIncomeOption = incomeCategories.querySelector('option');
+            if (firstIncomeOption) firstIncomeOption.selected = true;
+        } else {
+            incomeCategories.style.display = 'none';
+            outcomeCategories.style.display = 'block';
+            // Select first outcome category
+            const firstOutcomeOption = outcomeCategories.querySelector('option');
+            if (firstOutcomeOption) firstOutcomeOption.selected = true;
+        }
+    }
+    
+    // Initial filter
+    filterCategories();
+    
+    // Add event listeners
+    document.getElementById('type-income').addEventListener('change', filterCategories);
+    document.getElementById('type-outcome').addEventListener('change', filterCategories);
+});
+</script>
+{% endblock %}

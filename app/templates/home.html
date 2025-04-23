@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - Home{% endblock %}
+
+{% block content %}
+<div class="text-center mb-5">
+    <h1 class="display-4">Willkommen bei Gab-Lab Finance</h1>
+    <p class="lead">Gabos modulare Finanzanalyse-Plattform</p>
+</div>
+
+<div class="row row-cols-1 row-cols-md-3 g-4">
+    {% for module in modules %}
+    <div class="col">
+        <div class="card h-100 shadow-sm module-card">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-{{ module.icon }} fa-3x text-primary"></i>
+                </div>
+                <h5 class="card-title">{{ module.name }}</h5>
+                <p class="card-text">{{ module.description }}</p>
+                <a href="{{ module.url }}" class="btn btn-primary">
+                    Zum Modul <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

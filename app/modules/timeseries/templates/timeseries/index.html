@@ -1,0 +1,424 @@
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - Zeitreihen{% endblock %}
+
+{% block extra_css %}
+<style>
+    #timeseries-chart {
+        height: 500px;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        background-color: #fff;
+    }
+    
+    .portfolio-badge {
+        font-size: 0.85rem;
+    }
+    
+    .positive-value {
+        color: #28a745;
+    }
+    
+    .negative-value {
+        color: #dc3545;
+    }
+    
+    .last-update {
+        font-size: 0.8rem;
+        color: #6c757d;
+        font-style: italic;
+        margin-top: 1rem;
+        text-align: right;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2><i class="fas fa-chart-line me-2"></i>Zeitreihen-Analyse</h2>
+        <p class="text-muted">Analysieren Sie Finanzdaten im Zeitverlauf</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Einstellungen</h5>
+            </div>
+            <div class="card-body">
+                <form id="timeseries-form">
+                    <div class="mb-3">
+                        <label for="ticker" class="form-label">Wertpapier</label>
+                        <select class="form-select" id="ticker">
+                            {% for security in securities %}
+                            <option value="{{ security.ticker }}" data-currency="{{ security.currency }}" data-amount="{{ security.amount }}" {% if security.ticker == 'EUNL.DE' %}selected{% endif %}>
+                                {{ security.name }} ({{ security.category }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="timeframe" class="form-label">Zeitraum</label>
+                        <select class="form-select" id="timeframe">
+                            <option value="1m">1 Monat</option>
+                            <option value="3m">3 Monate</option>
+                            <option value="6m">6 Monate</option>
+                            <option value="1y" selected>1 Jahr</option>
+                            <option value="all">Alles</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="indicator" class="form-label">Indikator</label>
+                        <select class="form-select" id="indicator">
+                            <option value="sma">Simple Moving Average</option>
+                            <option value="ema">Exponential Moving Average</option>
+                            <option value="bollinger">Bollinger Bands</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-sync-alt me-1"></i>Aktualisieren
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Statistiken</h5>
+            </div>
+            <div class="card-body" id="statistics">
+                <div class="mb-2">
+                    <strong>Mittelwert:</strong> <span id="stat-mean">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Standardabweichung:</strong> <span id="stat-std">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Minimum:</strong> <span id="stat-min">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Maximum:</strong> <span id="stat-max">-</span>
+                </div>
+                <hr>
+                <div class="mb-2">
+                    <strong>Letzter Schlusskurs:</strong> <span id="stat-last-close">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Datum:</strong> <span id="stat-last-date">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Anzahl:</strong> <span id="stat-amount">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Aktueller Wert:</strong> <span id="stat-current-value">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Einstandswert:</strong> <span id="stat-acquisition">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Gewinn/Verlust:</strong> <span id="stat-gain-loss">-</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Rendite:</strong> <span id="stat-gain-loss-percent">-</span>
+                </div>
+                <div class="last-update" id="last-update-info">
+                    Stand: <span id="stat-last-date-full">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-body">
+                <div id="timeseries-chart"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initiales Laden der Daten
+    analyzeData();
+    
+    // Form Submit Handler
+    document.getElementById('timeseries-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        analyzeData();
+    });
+});
+
+function analyzeData() {
+    // Aktuelle Werte aus dem Formular auslesen
+    const selectedTicker = document.getElementById('ticker').value;
+    const selectedTimeframe = document.getElementById('timeframe').value;
+    const selectedIndicator = document.getElementById('indicator').value;
+    
+    // Währung für die Beschriftung der Y-Achse ermitteln
+    const tickerElement = document.getElementById('ticker');
+    const selectedOption = tickerElement.options[tickerElement.selectedIndex];
+    const currency = selectedOption.dataset.currency || 'EUR';
+    
+    // Daten an das Backend senden
+    fetch('/timeseries/analyze', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            ticker: selectedTicker,
+            timeframe: selectedTimeframe,
+            indicator: selectedIndicator,
+            currency: currency
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        plotTimeseries(data, currency);
+        updateStatistics(data.stats, currency, data.last_datetime);
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+function plotTimeseries(data, currency = 'EUR') {
+    const traces = [];
+    
+    // Name des Wertpapiers aus dem Dropdown ermitteln
+    const tickerElement = document.getElementById('ticker');
+    const selectedOption = tickerElement.options[tickerElement.selectedIndex];
+    const securityName = selectedOption.textContent.trim();
+    
+    // Hauptdaten
+    const mainTrace = {
+        x: data.dates,
+        y: data.values,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Kurs',
+        line: {
+            color: '#0d6efd',
+            width: 2
+        }
+    };
+    traces.push(mainTrace);
+    
+    // Indikator hinzufügen
+    if (data.indicator === 'sma' || data.indicator === 'ema') {
+        const indicatorName = data.indicator === 'sma' ? 'SMA (20)' : 'EMA (20)';
+        
+        // Prüfen, ob indicator_values vorhanden ist
+        if (data.indicator_values && data.indicator_values.length > 0) {
+            const indicatorTrace = {
+                x: data.dates,
+                y: data.indicator_values,
+                type: 'scatter',
+                mode: 'lines',
+                name: indicatorName,
+                line: {
+                    color: '#dc3545',
+                    width: 2
+                }
+            };
+            traces.push(indicatorTrace);
+        } else {
+            console.error('Keine Indikator-Werte gefunden für:', data.indicator);
+        }
+    } else if (data.indicator === 'bollinger') {
+        // Prüfen, ob indicator_values.middle vorhanden ist
+        if (data.indicator_values && data.indicator_values.middle) {
+            // Mittleres Band
+            const middleBandTrace = {
+                x: data.dates,
+                y: data.indicator_values.middle,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'SMA (20)',
+                line: {
+                    color: '#6c757d',
+                    width: 2
+                }
+            };
+            
+            // Oberes Band
+            const upperBandTrace = {
+                x: data.dates,
+                y: data.indicator_values.upper,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Oberes Band',
+                line: {
+                    color: '#28a745',
+                    width: 1,
+                    dash: 'dot'
+                }
+            };
+            
+            // Unteres Band
+            const lowerBandTrace = {
+                x: data.dates,
+                y: data.indicator_values.lower,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Unteres Band',
+                line: {
+                    color: '#dc3545',
+                    width: 1,
+                    dash: 'dot'
+                }
+            };
+            
+            traces.push(middleBandTrace, upperBandTrace, lowerBandTrace);
+        } else {
+            console.error('Keine Bollinger Band-Werte gefunden');
+        }
+    }
+    
+    const layout = {
+        title: `${securityName} (${data.ticker || 'Unbekannt'})`,
+        xaxis: {
+            title: 'Datum',
+            showgrid: true,
+            gridcolor: '#f0f0f0'
+        },
+        yaxis: {
+            title: `Kurs (${currency})`,
+            showgrid: true,
+            gridcolor: '#f0f0f0'
+        },
+        margin: {
+            l: 50,
+            r: 20,
+            t: 50,
+            b: 50
+        },
+        showlegend: true,
+        legend: {
+            x: 0,
+            y: 1
+        }
+    };
+    
+    Plotly.newPlot('timeseries-chart', traces, layout, {responsive: true});
+}
+
+function updateStatistics(stats, currency = 'EUR', lastDateTime = '') {
+    // Allgemeine Statistiken aktualisieren
+    document.getElementById('stat-mean').textContent = stats.mean ? stats.mean.toFixed(2) : '-';
+    document.getElementById('stat-std').textContent = stats.std ? stats.std.toFixed(2) : '-';
+    document.getElementById('stat-min').textContent = stats.min ? stats.min.toFixed(2) : '-';
+    document.getElementById('stat-max').textContent = stats.max ? stats.max.toFixed(2) : '-';
+    
+    // Portfolio-Statistiken aktualisieren
+    if (stats.last_close) {
+        document.getElementById('stat-last-close').textContent = `${stats.last_close.toFixed(2)} ${currency}`;
+    } else {
+        document.getElementById('stat-last-close').textContent = '-';
+    }
+    
+    // Datum des letzten Schlusskurses
+    if (stats.last_date) {
+        // Datum im deutschen Format anzeigen (TT.MM.YYYY)
+        const dateParts = stats.last_date.split('-');
+        if (dateParts.length === 3) {
+            const germanDate = `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`;
+            document.getElementById('stat-last-date').textContent = germanDate;
+        } else {
+            document.getElementById('stat-last-date').textContent = stats.last_date;
+        }
+    } else {
+        document.getElementById('stat-last-date').textContent = '-';
+    }
+    
+    // Vollständiger Zeitstempel mit Datum und Uhrzeit
+    if (stats.last_datetime) {
+        // Format: "2025-04-22 14:30:00" -> "22.04.2025, 14:30 Uhr"
+        const parts = stats.last_datetime.split(' ');
+        if (parts.length === 2) {
+            const datePart = parts[0];
+            const timePart = parts[1];
+            
+            const dateParts = datePart.split('-');
+            if (dateParts.length === 3) {
+                const germanDate = `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`;
+                
+                // Extrahiere nur Stunden und Minuten aus dem Zeitstempel
+                const timePieces = timePart.split(':');
+                const timeFormatted = timePieces.length >= 2 ? `${timePieces[0]}:${timePieces[1]}` : timePart;
+                
+                document.getElementById('stat-last-date-full').textContent = `${germanDate}, ${timeFormatted} Uhr`;
+            } else {
+                document.getElementById('stat-last-date-full').textContent = stats.last_datetime;
+            }
+        } else {
+            document.getElementById('stat-last-date-full').textContent = stats.last_datetime;
+        }
+    } else {
+        document.getElementById('stat-last-date-full').textContent = '-';
+    }
+    
+    if (stats.amount) {
+        document.getElementById('stat-amount').textContent = stats.amount;
+    } else {
+        document.getElementById('stat-amount').textContent = '-';
+    }
+    
+    if (stats.current_value) {
+        document.getElementById('stat-current-value').textContent = `${stats.current_value.toFixed(2)} ${currency}`;
+    } else {
+        document.getElementById('stat-current-value').textContent = '-';
+    }
+    
+    if (stats.acquisition_cost) {
+        document.getElementById('stat-acquisition').textContent = `${stats.acquisition_cost.toFixed(2)} ${currency}`;
+    } else {
+        document.getElementById('stat-acquisition').textContent = '-';
+    }
+    
+    // Gewinn/Verlust-Informationen
+    if (stats.gain_loss != null) {
+        const gainLossElement = document.getElementById('stat-gain-loss');
+        const gainLossValue = stats.gain_loss.toFixed(2);
+        gainLossElement.textContent = `${gainLossValue} ${currency}`;
+        
+        // Farbe je nach Gewinn oder Verlust setzen
+        if (stats.gain_loss > 0) {
+            gainLossElement.classList.add('positive-value');
+            gainLossElement.classList.remove('negative-value');
+        } else if (stats.gain_loss < 0) {
+            gainLossElement.classList.add('negative-value');
+            gainLossElement.classList.remove('positive-value');
+        } else {
+            gainLossElement.classList.remove('positive-value', 'negative-value');
+        }
+    } else {
+        document.getElementById('stat-gain-loss').textContent = '-';
+    }
+    
+    if (stats.gain_loss_percent != null) {
+        const gainLossPercentElement = document.getElementById('stat-gain-loss-percent');
+        const gainLossPercentValue = stats.gain_loss_percent.toFixed(2);
+        gainLossPercentElement.textContent = `${gainLossPercentValue} %`;
+        
+        // Farbe je nach Gewinn oder Verlust setzen
+        if (stats.gain_loss_percent > 0) {
+            gainLossPercentElement.classList.add('positive-value');
+            gainLossPercentElement.classList.remove('negative-value');
+        } else if (stats.gain_loss_percent < 0) {
+            gainLossPercentElement.classList.add('negative-value');
+            gainLossPercentElement.classList.remove('positive-value');
+        } else {
+            gainLossPercentElement.classList.remove('positive-value', 'negative-value');
+        }
+    } else {
+        document.getElementById('stat-gain-loss-percent').textContent = '-';
+    }
+}
+</script>
+{% endblock %}

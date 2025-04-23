@@ -1,0 +1,41 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="{{ url_for('main.home') }}">
+            <i class="fas fa-chart-line me-2"></i>Gab-Lab Finance
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('main.home') }}">
+                        <i class="fas fa-home me-1"></i>Home
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('timeseries.index') }}">
+                        <i class="fas fa-chart-line me-1"></i>Zeitreihen
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('costincome.index') }}">
+                        <i class="fas fa-chart-pie me-1"></i>Kosten/Einkommen
+                    </a>
+                </li>
+                <!-- Diese Routen existieren noch nicht, sie werden in zukünftiger Entwicklung hinzugefügt
+                <li class="nav-item">
+                    <a class="nav-link" href="#">
+                        <i class="fas fa-briefcase me-1"></i>Portfolio
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">
+                        <i class="fas fa-chart-bar me-1"></i>Analytics
+                    </a>
+                </li>
+                -->
+            </ul>
+        </div>
+    </div>
+</nav>

@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - Einnahmen/Ausgaben{% endblock %}
+
+{% block extra_css %}
+<style>
+    .income {
+        color: #198754;
+    }
+    .outcome {
+        color: #dc3545;
+    }
+    .balance-positive {
+        color: #198754;
+        font-weight: bold;
+    }
+    .balance-negative {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .summary-card {
+        transition: all 0.3s;
+    }
+    .summary-card:hover {
+        transform: translateY(-5px);
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Einnahmen/Ausgaben Übersicht</h1>
+    <a href="{{ url_for('costincome.add') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-1"></i> Neuer Eintrag
+    </a>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card h-100 summary-card shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title text-muted">Gesamte Einnahmen</h5>
+                <p class="display-6 income">{{ "%.2f"|format(income_total) }} €</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 summary-card shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title text-muted">Gesamte Ausgaben</h5>
+                <p class="display-6 outcome">{{ "%.2f"|format(outcome_total) }} €</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 summary-card shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title text-muted">Gesamtbilanz</h5>
+                <p class="display-6 {% if balance >= 0 %}balance-positive{% else %}balance-negative{% endif %}">
+                    {{ "%.2f"|format(balance) }} €
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Monthly Chart -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Monatliche Einnahmen und Ausgaben</h5>
+    </div>
+    <div class="card-body">
+        {% if monthly_stats %}
+        <div class="chart-container">
+            <canvas id="monthlyChart"></canvas>
+        </div>
+        {% else %}
+        <p class="text-center text-muted my-3">Keine Daten für die Grafik vorhanden</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Monthly Statistics -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Monatliche Übersicht</h5>
+    </div>
+    <div class="card-body">
+        {% if monthly_stats %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Monat</th>
+                        <th class="text-end">Einnahmen</th>
+                        <th class="text-end">Ausgaben</th>
+                        <th class="text-end">Bilanz</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in monthly_stats %}
+                    <tr>
+                        <td>{{ stat.month }}</td>
+                        <td class="text-end income">{{ "%.2f"|format(stat.income) }} €</td>
+                        <td class="text-end outcome">{{ "%.2f"|format(stat.outcome) }} €</td>
+                        <td class="text-end {% if stat.balance >= 0 %}balance-positive{% else %}balance-negative{% endif %}">
+                            {{ "%.2f"|format(stat.balance) }} €
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-center text-muted my-3">Keine Daten vorhanden</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Entries List -->
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Alle Einträge</h5>
+    </div>
+    <div class="card-body">
+        {% if entries %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Datum</th>
+                        <th>Typ</th>
+                        <th>Kategorie</th>
+                        <th>Beschreibung</th>
+                        <th class="text-end">Betrag</th>
+                        <th class="text-end">Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr>
+                        <td>{{ entry.date }}</td>
+                        <td>
+                            {% if entry.type == 'income' %}
+                            <span class="badge bg-success">Einnahme</span>
+                            {% else %}
+                            <span class="badge bg-danger">Ausgabe</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.category }}</td>
+                        <td>{{ entry.description }}</td>
+                        <td class="text-end {% if entry.type == 'income' %}income{% else %}outcome{% endif %}">
+                            {{ "%.2f"|format(entry.amount) }} €
+                        </td>
+                        <td class="text-end">
+                            <form method="POST" action="{{ url_for('costincome.delete', entry_id=entry.id) }}" 
+                                  class="d-inline" onsubmit="return confirm('Sind Sie sicher?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-center text-muted my-3">Keine Einträge vorhanden. Fügen Sie einen neuen Eintrag hinzu!</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Debug info to console
+        console.log("DOM loaded, checking for chart requirements");
+        
+        try {
+            // Check if Chart.js is loaded
+            if (typeof Chart === 'undefined') {
+                console.error("Chart.js library not loaded correctly");
+                return;
+            }
+            
+            // Only proceed if we have data
+            {% if monthly_stats %}
+            console.log("Monthly stats available, preparing chart data");
+            
+            // Get the chart data from monthly_stats directly if monthly_stats_chrono is not available
+            const chartLabels = [];
+            const chartIncomes = [];
+            const chartOutcomes = [];
+            const chartBalances = [];
+            
+            // Use chronological order if available, otherwise use monthly_stats
+            {% if monthly_stats_chrono is defined %}
+                console.log("Using monthly_stats_chrono for chart data");
+                // Use data passed from the backend in chronological order
+                {% for stat in monthly_stats_chrono %}
+                    chartLabels.push("{{ stat.month }}");
+                    chartIncomes.push({{ stat.income|float }});
+                    chartOutcomes.push({{ stat.outcome|float }});
+                    chartBalances.push({{ stat.balance|float }});
+                {% endfor %}
+            {% else %}
+                console.log("monthly_stats_chrono not available, using sorted monthly_stats");
+                // Create a sorted copy of monthly_stats (oldest first)
+                const sortedStats = [];
+                {% for stat in monthly_stats %}
+                    sortedStats.push({
+                        month: "{{ stat.month }}",
+                        monthKey: "{{ stat.month_key if stat.month_key is defined else '' }}",
+                        income: {{ stat.income|float }},
+                        outcome: {{ stat.outcome|float }},
+                        balance: {{ stat.balance|float }}
+                    });
+                {% endfor %}
+                
+                // Sort by month_key if available, otherwise by month string
+                sortedStats.sort(function(a, b) {
+                    if (a.monthKey && b.monthKey) {
+                        return a.monthKey.localeCompare(b.monthKey);
+                    }
+                    return a.month.localeCompare(b.month);
+                });
+                
+                // Add sorted data to chart arrays
+                for (const stat of sortedStats) {
+                    chartLabels.push(stat.month);
+                    chartIncomes.push(stat.income);
+                    chartOutcomes.push(stat.outcome);
+                    chartBalances.push(stat.balance);
+                }
+            {% endif %}
+            
+            console.log("Chart data prepared:", {
+                labels: chartLabels,
+                incomes: chartIncomes,
+                outcomes: chartOutcomes,
+                balances: chartBalances
+            });
+            
+            // Make sure the canvas exists
+            const chartCanvas = document.getElementById('monthlyChart');
+            if (!chartCanvas) {
+                console.error("Chart canvas element 'monthlyChart' not found in the DOM");
+                return;
+            }
+            
+            console.log("Creating chart with Canvas context");
+            const ctx = chartCanvas.getContext('2d');
+            const monthlyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartLabels,
+                    datasets: [
+                        {
+                            label: 'Einnahmen',
+                            data: chartIncomes,
+                            backgroundColor: 'rgba(25, 135, 84, 0.7)',
+                            borderColor: 'rgba(25, 135, 84, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Ausgaben',
+                            data: chartOutcomes,
+                            backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                            borderColor: 'rgba(220, 53, 69, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Bilanz',
+                            data: chartBalances,
+                            type: 'line',
+                            borderColor: 'rgba(13, 110, 253, 1)',
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointBackgroundColor: 'rgba(13, 110, 253, 1)',
+                            pointRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString() + ' €';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += new Intl.NumberFormat('de-DE', { 
+                                            style: 'currency', 
+                                            currency: 'EUR' 
+                                        }).format(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            console.log("Chart created successfully");
+            {% else %}
+            console.log("No monthly_stats data available for chart");
+            {% endif %}
+        } catch (error) {
+            console.error("Error creating chart:", error);
+        }
+    });
+</script>
+{% endblock %}
