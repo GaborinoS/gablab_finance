@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - Asset bearbeiten{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Asset bearbeiten</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('portfolio.edit_asset', asset_class=asset.asset_class, index=asset.index) }}">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="name" name="name" value="{{ asset.name }}" required>
+                        </div>
+                        
+                        {% if asset.asset_class != 'savings' %}
+                        <div class="mb-3">
+                            <label for="ticker" class="form-label">Ticker-Symbol</label>
+                            <input type="text" class="form-control" id="ticker" name="ticker" value="{{ asset.ticker }}">
+                            <div class="form-text">Das Ticker-Symbol für das Asset an der Börse</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="isin" class="form-label">ISIN</label>
+                            <input type="text" class="form-control" id="isin" name="isin" value="{{ asset.isin if asset.isin is defined else '' }}">
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label for="amount" class="form-label">Menge/Stückzahl</label>
+                            <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0" value="{{ asset.amount }}" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="acquisition_cost" class="form-label">Einstandswert (gesamt)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="acquisition_cost" name="acquisition_cost" step="0.01" min="0" value="{{ asset.acquisition_cost }}" required>
+                                <span class="input-group-text">{{ asset.currency if asset.currency is defined else '€' }}</span>
+                            </div>
+                            <div class="form-text">Der Gesamtbetrag, den Sie für dieses Asset gezahlt haben (inkl. Gebühren)</div>
+                        </div>
+                        
+                        {% if asset.asset_class == 'savings' %}
+                        <div class="mb-3">
+                            <label for="interest_rate" class="form-label">Zinssatz (%)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="interest_rate" name="interest_rate" step="0.01" min="0" value="{{ asset.interest_rate_percent if asset.interest_rate_percent is defined else 0 }}">
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text">Der Zinssatz für das Sparguthaben (in Prozent)</div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Änderungen speichern
+                            </button>
+                            <a href="{{ url_for('portfolio.index') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i> Abbrechen
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

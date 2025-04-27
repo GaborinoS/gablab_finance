@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - Portfolio{% endblock %}
+
+{% block extra_css %}
+<style>
+    .asset-card {
+        transition: all 0.3s ease;
+    }
+    .asset-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .chart-container {
+        height: 300px;
+    }
+    .text-gain {
+        color: #28a745;
+    }
+    .text-loss {
+        color: #dc3545;
+    }
+    .badge-gain {
+        background-color: #28a745;
+    }
+    .badge-loss {
+        background-color: #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Mein Portfolio</h1>
+        <div>
+            <a href="{{ url_for('portfolio.refresh') }}" class="btn btn-outline-primary me-2">
+                <i class="fas fa-sync-alt me-1"></i> Aktualisieren
+            </a>
+            <a href="{{ url_for('portfolio.add_asset') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i> Asset hinzufügen
+            </a>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-1"></i> Letztes Update: {{ last_update }}
+    </div>
+
+    <!-- Portfolio Overview -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Portfolio-Übersicht</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <h5>Gesamtwert</h5>
+                            <h2 class="text-primary">{{ "%.2f"|format(total_value) }} €</h2>
+                        </div>
+                        <div class="col-6">
+                            <h5>Einstandswert</h5>
+                            <h4>{{ "%.2f"|format(total_acquisition_cost) }} €</h4>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <h5>Performance</h5>
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>Gewinn/Verlust:</strong>
+                                <span class="{% if total_gain_loss >= 0 %}text-gain{% else %}text-loss{% endif %}">
+                                    {{ "%.2f"|format(total_gain_loss) }} €
+                                </span>
+                            </div>
+                            <div>
+                                <strong>Rendite:</strong>
+                                <span class="{% if total_gain_loss_percent >= 0 %}text-gain{% else %}text-loss{% endif %}">
+                                    {{ "%.2f"|format(total_gain_loss_percent) }} %
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <h5>Asset-Klassen</h5>
+                    <ul class="list-group mt-3">
+                        {% for asset_class, percentage in asset_allocation.items() %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ asset_class }}
+                            <span class="badge bg-primary rounded-pill">{{ "%.1f"|format(percentage) }}%</span>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item text-center text-muted">Keine Assets vorhanden</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Asset-Verteilung</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        {% if asset_allocation %}
+                        <canvas id="assetAllocationChart"></canvas>
+                        {% else %}
+                        <div class="d-flex h-100 justify-content-center align-items-center">
+                            <p class="text-muted">Keine Daten verfügbar</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ETFs Section -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">ETFs</h5>
+            <span class="badge bg-light text-primary">{{ portfolio.etf|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if portfolio.etf %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Ticker</th>
+                            <th>Stück</th>
+                            <th>Einstand</th>
+                            <th>Aktuell</th>
+                            <th>Gewinn/Verlust</th>
+                            <th>Rendite</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for etf in portfolio.etf %}
+                        <tr>
+                            <td>{{ etf.name }}</td>
+                            <td>{{ etf.ticker }}</td>
+                            <td>{{ etf.amount }}</td>
+                            <td>{{ "%.2f"|format(etf.acquisition_cost) }} {{ etf.currency }}</td>
+                            <td>
+                                {% if etf.current_value is defined %}
+                                    {{ "%.2f"|format(etf.current_value) }} {{ etf.currency }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if etf.gain_loss is defined %}
+                                    <span class="{% if etf.gain_loss >= 0 %}text-gain{% else %}text-loss{% endif %}">
+                                        {{ "%.2f"|format(etf.gain_loss) }} {{ etf.currency }}
+                                    </span>
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if etf.gain_loss_percent is defined %}
+                                    <span class="{% if etf.gain_loss_percent >= 0 %}text-gain{% else %}text-loss{% endif %}">
+                                        {{ "%.2f"|format(etf.gain_loss_percent) }} %
+                                    </span>
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('portfolio.edit_asset', asset_class='etf', index=loop.index0) }}" class="btn btn-sm btn-primary me-1">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('portfolio.delete_asset', asset_class='etf', index=loop.index0) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Sind Sie sicher?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-center text-muted my-4">Keine ETFs im Portfolio</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Stocks Section -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Aktien</h5>
+            <span class="badge bg-light text-primary">{{ portfolio.stocks|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if portfolio.stocks %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Ticker</th>
+                            <th>Stück</th>
+                            <th>Einstand</th>
+                            <th>Aktuell</th>
+                            <th>Gewinn/Verlust</th>
+                            <th>Rendite</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stock in portfolio.stocks %}
+                        <tr>
+                            <td>{{ stock.name }}</td>
+                            <td>{{ stock.ticker }}</td>
+                            <td>{{ stock.amount }}</td>
+                            <td>{{ "%.2f"|format(stock.acquisition_cost) }} {{ stock.currency }}</td>
+                            <td>
+                                {% if stock.current_value is defined %}
+                                    {{ "%.2f"|format(stock.current_value) }} {{ stock.currency }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if stock.gain_loss is defined %}
+                                    <span class="{% if stock.gain_loss >= 0 %}text-gain{% else %}text-loss{% endif %}">
+                                        {{ "%.2f"|format(stock.gain_loss) }} {{ stock.currency }}
+                                    </span>
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if stock.gain_loss_percent is defined %}
+                                    <span class="{% if stock.gain_loss_percent >= 0 %}text-gain{% else %}text-loss{% endif %}">
+                                        {{ "%.2f"|format(stock.gain_loss_percent) }} %
+                                    </span>
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('portfolio.edit_asset', asset_class='stocks', index=loop.index0) }}" class="btn btn-sm btn-primary me-1">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('portfolio.delete_asset', asset_class='stocks', index=loop.index0) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Sind Sie sicher?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-center text-muted my-4">Keine Aktien im Portfolio</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Savings Section -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Sparguthaben</h5>
+            <span class="badge bg-light text-primary">{{ portfolio.savings|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if portfolio.savings %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Betrag</th>
+                            <th>Einstand</th>
+                            <th>Zinssatz</th>
+                            <th>Gewinn/Verlust</th>
+                            <th>Rendite</th>
+                            <th>Währung</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for saving in portfolio.savings %}
+                        <tr>
+                            <td>{{ saving.name }}</td>
+                            <td>{{ "%.2f"|format(saving.amount) }}</td>
+                            <td>{{ "%.2f"|format(saving.acquisition_cost) }}</td>
+                            <td>{{ "%.2f"|format(saving.interest_rate * 100) if saving.interest_rate is defined else "0.00" }}%</td>
+                            <td>
+                                {% if saving.gain_loss is defined %}
+                                    <span class="{% if saving.gain_loss >= 0 %}text-gain{% else %}text-loss{% endif %}">
+                                        {{ "%.2f"|format(saving.gain_loss) }} {{ saving.currency }}
+                                    </span>
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if saving.gain_loss_percent is defined %}
+                                    <span class="{% if saving.gain_loss_percent >= 0 %}text-gain{% else %}text-loss{% endif %}">
+                                        {{ "%.2f"|format(saving.gain_loss_percent) }} %
+                                    </span>
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>{{ saving.currency }}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('portfolio.edit_asset', asset_class='savings', index=loop.index0) }}" class="btn btn-sm btn-primary me-1">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('portfolio.delete_asset', asset_class='savings', index=loop.index0) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Sind Sie sicher?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-center text-muted my-4">Keine Sparguthaben im Portfolio</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    {% if asset_allocation %}
+    // Chart für Asset-Verteilung
+    const ctx = document.getElementById('assetAllocationChart').getContext('2d');
+    
+    const assetData = {
+        labels: [
+            {% for asset_class in asset_allocation.keys() %}
+            '{{ asset_class }}',
+            {% endfor %}
+        ],
+        datasets: [{
+            data: [
+                {% for percentage in asset_allocation.values() %}
+                {{ percentage }},
+                {% endfor %}
+            ],
+            backgroundColor: [
+                '#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14'
+            ]
+        }]
+    };
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: assetData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
+                }
+            }
+        }
+    });
+    {% endif %}
+});
+</script>
+{% endblock %}

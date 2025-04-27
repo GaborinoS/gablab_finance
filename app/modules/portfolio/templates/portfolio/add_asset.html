@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - Asset hinzufügen{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Asset zum Portfolio hinzufügen</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('portfolio.add_asset') }}">
+                        <div class="mb-3">
+                            <label for="asset_class" class="form-label">Asset-Klasse</label>
+                            <select class="form-select" id="asset_class" name="asset_class" required onchange="toggleFields()">
+                                <option value="">Bitte wählen...</option>
+                                <option value="etf">ETF</option>
+                                <option value="stocks">Aktie</option>
+                                <option value="bonds">Anleihe</option>
+                                <option value="commodities">Rohstoff</option>
+                                <option value="realEstate">Immobilie</option>
+                                <option value="savings">Sparguthaben</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3" id="ticker_field">
+                            <label for="ticker" class="form-label">Ticker-Symbol</label>
+                            <input type="text" class="form-control" id="ticker" name="ticker" placeholder="z.B. EUNL.DE">
+                            <div class="form-text">Das Ticker-Symbol für das Asset an der Börse</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="name" name="name" required placeholder="z.B. iShares Core MSCI World">
+                        </div>
+                        
+                        <div class="mb-3" id="isin_field">
+                            <label for="isin" class="form-label">ISIN</label>
+                            <input type="text" class="form-control" id="isin" name="isin" placeholder="z.B. IE00B4L5Y983">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="currency" class="form-label">Währung</label>
+                            <select class="form-select" id="currency" name="currency">
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                                <option value="GBP">GBP</option>
+                                <option value="CHF">CHF</option>
+                                <option value="JPY">JPY</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="amount" class="form-label">Menge/Stückzahl</label>
+                            <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="acquisition_cost" class="form-label">Einstandswert (gesamt)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="acquisition_cost" name="acquisition_cost" step="0.01" min="0" required>
+                                <span class="input-group-text" id="currency_addon">€</span>
+                            </div>
+                            <div class="form-text">Der Gesamtbetrag, den Sie für dieses Asset gezahlt haben (inkl. Gebühren)</div>
+                        </div>
+                        
+                        <div class="mb-3" id="interest_rate_field" style="display: none;">
+                            <label for="interest_rate" class="form-label">Zinssatz (%)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="interest_rate" name="interest_rate" step="0.01" min="0" value="0">
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text">Der Zinssatz für das Sparguthaben (in Prozent)</div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Asset hinzufügen</button>
+                            <a href="{{ url_for('portfolio.index') }}" class="btn btn-outline-secondary">Abbrechen</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleFields() {
+    const assetClass = document.getElementById('asset_class').value;
+    const tickerField = document.getElementById('ticker_field');
+    const isinField = document.getElementById('isin_field');
+    const interestRateField = document.getElementById('interest_rate_field');
+    const currencyAddon = document.getElementById('currency_addon');
+    const currencySelect = document.getElementById('currency');
+    
+    // Reset all fields
+    tickerField.style.display = 'block';
+    isinField.style.display = 'block';
+    interestRateField.style.display = 'none';
+    
+    // Update currency symbol
+    currencyAddon.innerText = currencySelect.value === 'EUR' ? '€' : 
+                             currencySelect.value === 'USD' ? '$' : 
+                             currencySelect.value === 'GBP' ? '£' : 
+                             currencySelect.value === 'CHF' ? 'CHF' : '¥';
+    
+    // Adjust fields based on asset class
+    if (assetClass === 'savings') {
+        tickerField.style.display = 'none';
+        isinField.style.display = 'none';
+        interestRateField.style.display = 'block';
+    }
+}
+
+// Setup event listeners when the document is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    toggleFields();
+    
+    // Add event listener for currency change
+    document.getElementById('currency').addEventListener('change', function() {
+        const currencyAddon = document.getElementById('currency_addon');
+        currencyAddon.innerText = this.value === 'EUR' ? '€' : 
+                                this.value === 'USD' ? '$' : 
+                                this.value === 'GBP' ? '£' : 
+                                this.value === 'CHF' ? 'CHF' : '¥';
+    });
+});
+</script>
+{% endblock %}
