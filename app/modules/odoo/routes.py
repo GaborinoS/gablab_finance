@@ -5,7 +5,7 @@ from app.modules.odoo import bp
 
 # Odoo configuration
 ODOO_HOST = '10.0.0.43'
-ODOO_PORT = 8069
+ODOO_PORT = 8069  # Use 8069 or change to 8071 if you want to connect to the other instance
 
 @bp.route('/')
 @login_required
