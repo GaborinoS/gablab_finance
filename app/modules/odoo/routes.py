@@ -30,7 +30,7 @@ def proxy(path):
             headers={key: value for (key, value) in request.headers if key != 'Host'},
             data=request.get_data(),
             cookies=request.cookies,
-            allow_redirects=False)
+            allow_redirects=True)  # Changed to True to follow redirects
         
         print(f"Response status: {resp.status_code}")  # Debug print
         
