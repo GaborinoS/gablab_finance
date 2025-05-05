@@ -10,11 +10,10 @@ ODOO_PORT = 8069  # Use 8069 or change to 8071 if you want to connect to the oth
 @bp.route('/')
 @login_required
 def index():
-    """Main Odoo page with link to open Odoo"""
-    # Use internal address for the button since that's what works
-    odoo_url = f"http://{ODOO_HOST}:{ODOO_PORT}"
+    # Point to the working Odoo instance on port 8069
+    odoo_url = "http://localhost:8069"
     return render_template('odoo/index.html', odoo_url=odoo_url)
-
+    
 @bp.route('/proxy', defaults={'path': ''})
 @bp.route('/proxy/<path:path>')
 @login_required
