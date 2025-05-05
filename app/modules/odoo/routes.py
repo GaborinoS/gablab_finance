@@ -18,21 +18,25 @@ def index():
 @bp.route('/proxy/<path:path>')
 @login_required
 def proxy(path):
-    """Proxy requests to Odoo server"""
+    """Proxy requests to Odoo server with improved headers and cookie handling"""
     target_url = f'http://{ODOO_HOST}:{ODOO_PORT}/{path}'
-    print(f"Proxying request to: {target_url}")  # Debug print
+    print(f"Proxying request to: {target_url}")
     
     try:
-        # Forward the request to Odoo
+        # Copy request headers but exclude Host
+        headers = {key: value for (key, value) in request.headers.items() 
+                  if key.lower() not in ('host', 'content-length')}
+        
+        # Forward the request to Odoo with all cookies
         resp = requests.request(
             method=request.method,
             url=target_url,
-            headers={key: value for (key, value) in request.headers if key != 'Host'},
+            headers=headers,
             data=request.get_data(),
             cookies=request.cookies,
-            allow_redirects=True)  # Changed to True to follow redirects
+            allow_redirects=True)
         
-        print(f"Response status: {resp.status_code}")  # Debug print
+        print(f"Response status: {resp.status_code}")
         
         # Create response
         response = current_app.response_class(
@@ -41,12 +45,17 @@ def proxy(path):
             content_type=resp.headers.get('Content-Type', 'text/html')
         )
         
-        # Pass through headers
-        for key, value in resp.headers.items():
-            if key.lower() not in ('content-length', 'transfer-encoding', 'connection'):
-                response.headers[key] = value
+        # Pass through all headers from the Odoo response
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        for name, value in resp.headers.items():
+            if name.lower() not in excluded_headers:
+                response.headers[name] = value
                 
+        # Ensure cookie sessions are properly passed
+        if 'set-cookie' in resp.headers:
+            response.headers['Set-Cookie'] = resp.headers['set-cookie']
+        
         return response
     except Exception as e:
-        print(f"Proxy error: {str(e)}")  # Debug print
+        print(f"Proxy error: {str(e)}")
         return f"Error connecting to Odoo: {str(e)}", 500
