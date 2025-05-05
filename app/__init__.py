@@ -39,6 +39,10 @@ def create_app(config_class=Config):
     # Register portfolio module
     from app.modules.portfolio import bp as portfolio_bp
     app.register_blueprint(portfolio_bp, url_prefix='/portfolio')
+
+        # Register odoo module
+    from app.modules.odoo import bp as odoo_bp
+    app.register_blueprint(odoo_bp, url_prefix='/odoo')
     
     # Create database tables - only needed for development
     with app.app_context():

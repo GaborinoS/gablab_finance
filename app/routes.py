@@ -39,6 +39,12 @@ def home():
                 'description': 'Verwalten Sie Ihr Investment-Portfolio',
                 'url': '/portfolio',
                 'icon': 'briefcase'
+            },
+                       {
+                'name': 'Odoo Integration',
+                'description': 'Verbindung mit Ihrem Odoo-ERP-System',
+                'url': '/odoo',
+                'icon': 'plug'
             }
         ]
     return render_template('home.html', modules=modules)
