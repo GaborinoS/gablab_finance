@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 
 # Define the tickers you want to cache
-TICKERS = ['EUNL.DE', 'SXR8.DE', 'LIRU.DE', 'MEUD.PA']
+TICKERS = ['SXR8.DE','EUNL.DE',  'LIRU.DE', 'MEUD.PA']
 actual_prices = [528.59, 95.33, 83.21, 254.50]
 QUANTITY = [1,1,1,1]
 
