@@ -5,6 +5,7 @@ from datetime import datetime
 # Define the tickers you want to cache
 TICKERS = ['EUNL.DE', 'SXR8.DE', 'LIRU.DE', 'MEUD.PA']
 actual_prices = [528.59, 95.33, 83.21, 254.50]
+QUANTITY = [1.18,18.18,4.0,0.98]
 
 # Create cache directory
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache')
@@ -19,12 +20,12 @@ for ticker in TICKERS:
     # Create initial cache data
     initial_data = {
         'ticker': ticker,
-        'last_close': actual_prices[i],  # Dummy value
+        'last_close': actual_prices[i]*QUANTITY[i],  # Dummy value
         'last_date': datetime.now().strftime('%Y-%m-%d'),
         'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'dates': [datetime.now().strftime('%Y-%m-%d')],
-        'values': [actual_prices[i]],  # Dummy value
+        'values': [actual_prices[i]*QUANTITY[i]]  # Dummy value
     }
     i += 1
     # Write to cache file
