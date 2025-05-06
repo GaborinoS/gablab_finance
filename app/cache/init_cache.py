@@ -5,7 +5,7 @@ from datetime import datetime
 # Define the tickers you want to cache
 TICKERS = ['EUNL.DE', 'SXR8.DE', 'LIRU.DE', 'MEUD.PA']
 actual_prices = [528.59, 95.33, 83.21, 254.50]
-QUANTITY = [1.18,18.18,4.0,0.98]
+QUANTITY = [1,1,1,1]
 
 # Create cache directory
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache')
