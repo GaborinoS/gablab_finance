@@ -5,8 +5,125 @@ from app import db
 from app.models import PortfolioData
 import json
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
+import time
+import random
 
+# Create a simple local file-based cache system
+CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'cache')
+if not os.path.exists(CACHE_DIR):
+    os.makedirs(CACHE_DIR)
+
+def get_cached_data(ticker):
+    """Get cached data for a ticker if it exists and is fresh"""
+    cache_file = os.path.join(CACHE_DIR, f"{ticker.replace('/', '_').replace(':', '_')}.json")
+    
+    if not os.path.exists(cache_file):
+        return None
+        
+    # Check if data is stale (older than 6 hours)
+    file_time = datetime.fromtimestamp(os.path.getmtime(cache_file))
+    time_diff = datetime.now() - file_time
+    if time_diff > timedelta(hours=6):
+        return None
+        
+    try:
+        with open(cache_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error reading cache file for {ticker}: {e}")
+        return None
+
+def update_cache(ticker, data):
+    """Update the cache for a ticker"""
+    cache_file = os.path.join(CACHE_DIR, f"{ticker.replace('/', '_').replace(':', '_')}.json")
+    
+    try:
+        with open(cache_file, 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"Error writing cache file for {ticker}: {e}")
+
+def is_cache_fresh(ticker):
+    """Check if the cache for a ticker is fresh (updated within the last 6 hours)"""
+    cache_file = os.path.join(CACHE_DIR, f"{ticker.replace('/', '_').replace(':', '_')}.json")
+    
+    if not os.path.exists(cache_file):
+        return False
+        
+    file_time = datetime.fromtimestamp(os.path.getmtime(cache_file))
+    time_diff = datetime.now() - file_time
+    return time_diff <= timedelta(hours=6)
+
+def fetch_price_safely(ticker_symbol):
+    """Fetch price data with cache and rate limit protection"""
+    # Check cache first
+    cached_data = get_cached_data(ticker_symbol)
+    if cached_data:
+        print(f"Using cached data for {ticker_symbol}")
+        return cached_data.get('last_close', 0), cached_data
+        
+    # If we have to fetch, introduce a random delay to avoid rate limiting
+    delay = random.uniform(0.5, 2.0)
+    time.sleep(delay)
+    
+    try:
+        print(f"Fetching fresh data for {ticker_symbol}")
+        ticker = yf.Ticker(ticker_symbol)
+        history = ticker.history(period="1d")
+        
+        if not history.empty:
+            current_price = float(history['Close'].iloc[-1])
+            
+            # Create cache data
+            cache_data = {
+                'ticker': ticker_symbol,
+                'last_close': current_price,
+                'last_date': datetime.now().strftime('%Y-%m-%d'),
+                'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'dates': [datetime.now().strftime('%Y-%m-%d')],  # Minimal date array
+                'values': [float(current_price)]  # Minimal values array
+            }
+            
+            # Update cache
+            update_cache(ticker_symbol, cache_data)
+            
+            return current_price, cache_data
+        else:
+            print(f"No data found for {ticker_symbol}")
+            
+            # Create fallback cache data with dummy values
+            fallback_data = {
+                'ticker': ticker_symbol,
+                'last_close': 100.0,  # Dummy value
+                'last_date': datetime.now().strftime('%Y-%m-%d'),
+                'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'dates': [datetime.now().strftime('%Y-%m-%d')],
+                'values': [100.0]
+            }
+            
+            # Update cache with fallback data
+            update_cache(ticker_symbol, fallback_data)
+            
+            return 0, fallback_data
+    except Exception as e:
+        print(f"Error fetching data for {ticker_symbol}: {e}")
+        
+        # Create fallback cache data with dummy values
+        fallback_data = {
+            'ticker': ticker_symbol,
+            'last_close': 100.0,  # Dummy value
+            'last_date': datetime.now().strftime('%Y-%m-%d'),
+            'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'dates': [datetime.now().strftime('%Y-%m-%d')],
+            'values': [100.0]
+        }
+        
+        # Update cache with fallback data
+        update_cache(ticker_symbol, fallback_data)
+        
+        return 0, fallback_data
 @bp.route('/')
 @login_required
 def index():
@@ -37,6 +154,14 @@ def index():
     total_acquisition_cost = 0
     asset_allocation = {}
     
+    # Data for earnings chart
+    performance_data = {
+        'labels': [],
+        'acquisition_costs': [],
+        'current_values': [],
+        'gains_losses': []
+    }
+    
     # Process ETFs
     etf_total = 0
     etf_current_value = 0
@@ -49,35 +174,32 @@ def index():
             
             if ticker_symbol and amount > 0:
                 try:
-                    # Get current price from Yahoo Finance
-                    ticker = yf.Ticker(ticker_symbol)
-                    history = ticker.history(period="1d")
+                    # Get data with cache and rate limit protection
+                    current_price, _ = fetch_price_safely(ticker_symbol)
                     
-                    if not history.empty:
-                        current_price = history['Close'].iloc[-1]
-                        current_value = current_price * amount
-                        
-                        # Calculate gain/loss
-                        gain_loss = current_value - acquisition_cost
-                        gain_loss_percent = (gain_loss / acquisition_cost * 100) if acquisition_cost > 0 else 0
-                        
-                        # Update ETF with current data
-                        portfolio_data['etf'][i]['current_price'] = round(current_price, 2)
-                        portfolio_data['etf'][i]['current_value'] = round(current_value, 2)
-                        portfolio_data['etf'][i]['gain_loss'] = round(gain_loss, 2)
-                        portfolio_data['etf'][i]['gain_loss_percent'] = round(gain_loss_percent, 2)
-                        
-                        etf_current_value += current_value
-                    else:
-                        # Use acquisition cost as fallback
-                        portfolio_data['etf'][i]['current_price'] = 0
-                        portfolio_data['etf'][i]['current_value'] = acquisition_cost
-                        portfolio_data['etf'][i]['gain_loss'] = 0
-                        portfolio_data['etf'][i]['gain_loss_percent'] = 0
-                        
-                        etf_current_value += acquisition_cost
+                    current_value = current_price * amount
+                    
+                    # Calculate gain/loss
+                    gain_loss = current_value - acquisition_cost
+                    gain_loss_percent = (gain_loss / acquisition_cost * 100) if acquisition_cost > 0 else 0
+                    
+                    # Update ETF with current data
+                    portfolio_data['etf'][i]['current_price'] = round(current_price, 2)
+                    portfolio_data['etf'][i]['current_value'] = round(current_value, 2)
+                    portfolio_data['etf'][i]['gain_loss'] = round(gain_loss, 2)
+                    portfolio_data['etf'][i]['gain_loss_percent'] = round(gain_loss_percent, 2)
+                    
+                    etf_current_value += current_value
+                    
+                    # Add data for performance chart
+                    if acquisition_cost > 0:
+                        performance_data['labels'].append(etf.get('name', ticker_symbol))
+                        performance_data['acquisition_costs'].append(round(acquisition_cost, 2))
+                        performance_data['current_values'].append(round(current_value, 2))
+                        performance_data['gains_losses'].append(round(gain_loss, 2))
+                    
                 except Exception as e:
-                    print(f"Error getting data for {ticker_symbol}: {e}")
+                    print(f"Error processing {ticker_symbol}: {e}")
                     # Use acquisition cost as fallback
                     portfolio_data['etf'][i]['current_price'] = 0
                     portfolio_data['etf'][i]['current_value'] = acquisition_cost
@@ -107,35 +229,32 @@ def index():
             
             if ticker_symbol and amount > 0:
                 try:
-                    # Get current price from Yahoo Finance
-                    ticker = yf.Ticker(ticker_symbol)
-                    history = ticker.history(period="1d")
+                    # Get data with cache and rate limit protection
+                    current_price, _ = fetch_price_safely(ticker_symbol)
                     
-                    if not history.empty:
-                        current_price = history['Close'].iloc[-1]
-                        current_value = current_price * amount
-                        
-                        # Calculate gain/loss
-                        gain_loss = current_value - acquisition_cost
-                        gain_loss_percent = (gain_loss / acquisition_cost * 100) if acquisition_cost > 0 else 0
-                        
-                        # Update stock with current data
-                        portfolio_data['stocks'][i]['current_price'] = round(current_price, 2)
-                        portfolio_data['stocks'][i]['current_value'] = round(current_value, 2)
-                        portfolio_data['stocks'][i]['gain_loss'] = round(gain_loss, 2)
-                        portfolio_data['stocks'][i]['gain_loss_percent'] = round(gain_loss_percent, 2)
-                        
-                        stocks_current_value += current_value
-                    else:
-                        # Use acquisition cost as fallback
-                        portfolio_data['stocks'][i]['current_price'] = 0
-                        portfolio_data['stocks'][i]['current_value'] = acquisition_cost
-                        portfolio_data['stocks'][i]['gain_loss'] = 0
-                        portfolio_data['stocks'][i]['gain_loss_percent'] = 0
-                        
-                        stocks_current_value += acquisition_cost
+                    current_value = current_price * amount
+                    
+                    # Calculate gain/loss
+                    gain_loss = current_value - acquisition_cost
+                    gain_loss_percent = (gain_loss / acquisition_cost * 100) if acquisition_cost > 0 else 0
+                    
+                    # Update stock with current data
+                    portfolio_data['stocks'][i]['current_price'] = round(current_price, 2)
+                    portfolio_data['stocks'][i]['current_value'] = round(current_value, 2)
+                    portfolio_data['stocks'][i]['gain_loss'] = round(gain_loss, 2)
+                    portfolio_data['stocks'][i]['gain_loss_percent'] = round(gain_loss_percent, 2)
+                    
+                    stocks_current_value += current_value
+                    
+                    # Add data for performance chart
+                    if acquisition_cost > 0:
+                        performance_data['labels'].append(stock.get('name', ticker_symbol))
+                        performance_data['acquisition_costs'].append(round(acquisition_cost, 2))
+                        performance_data['current_values'].append(round(current_value, 2))
+                        performance_data['gains_losses'].append(round(gain_loss, 2))
+                    
                 except Exception as e:
-                    print(f"Error getting data for {ticker_symbol}: {e}")
+                    print(f"Error processing {ticker_symbol}: {e}")
                     # Use acquisition cost as fallback
                     portfolio_data['stocks'][i]['current_price'] = 0
                     portfolio_data['stocks'][i]['current_value'] = acquisition_cost
@@ -212,6 +331,12 @@ def index():
             if acquisition_cost > 0:
                 gain_loss_percent = (amount - acquisition_cost) / acquisition_cost * 100
                 portfolio_data['savings'][i]['gain_loss_percent'] = round(gain_loss_percent, 2)
+                
+                # Add data for performance chart
+                performance_data['labels'].append(savings.get('name', "Savings"))
+                performance_data['acquisition_costs'].append(round(acquisition_cost, 2))
+                performance_data['current_values'].append(round(amount, 2))
+                performance_data['gains_losses'].append(round(amount - acquisition_cost, 2))
             else:
                 portfolio_data['savings'][i]['gain_loss_percent'] = 0
                 
@@ -245,6 +370,7 @@ def index():
                           total_gain_loss=total_gain_loss,
                           total_gain_loss_percent=total_gain_loss_percent,
                           asset_allocation=allocation_percentages,
+                          performance_data=performance_data,
                           last_update=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 @bp.route('/add_asset', methods=['GET', 'POST'])
@@ -306,6 +432,29 @@ def add_asset():
         if asset_class != 'savings':
             new_asset["ticker"] = ticker
             new_asset["isin"] = isin
+            
+            # Pre-fetch and cache the ticker data if needed
+            if ticker and not is_cache_fresh(ticker):
+                try:
+                    # Introduce a random delay to avoid rate limiting
+                    time.sleep(random.uniform(0.5, 2.0))
+                    
+                    ticker_obj = yf.Ticker(ticker)
+                    history = ticker_obj.history(period="1d")
+                    
+                    if not history.empty:
+                        current_price = float(history['Close'].iloc[-1])
+                        
+                        # Create and save cache data
+                        cache_data = {
+                            'ticker': ticker,
+                            'last_close': current_price,
+                            'last_date': datetime.now().strftime('%Y-%m-%d'),
+                            'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        update_cache(ticker, cache_data)
+                except Exception as e:
+                    print(f"Failed to pre-fetch ticker data for {ticker}: {e}")
         else:
             # Handle interest rate for savings
             interest_rate = float(request.form.get('interest_rate', 0)) / 100.0  # Convert from percentage to decimal
@@ -331,7 +480,44 @@ def add_asset():
 @login_required
 def refresh():
     """Refresh market data for all assets"""
-    flash('Marktdaten werden aktualisiert...', 'info')
+    # Get current user's portfolio
+    portfolio = PortfolioData.query.filter_by(user_id=current_user.id).first()
+    
+    if portfolio is None:
+        flash('Portfolio nicht gefunden', 'danger')
+        return redirect(url_for('portfolio.index'))
+    
+    # Get portfolio data
+    portfolio_data = portfolio.get_data()
+    
+    # Collect all tickers to refresh
+    tickers = []
+    for asset_class in ['etf', 'stocks', 'bonds', 'commodities', 'realEstate']:
+        for asset in portfolio_data.get(asset_class, []):
+            ticker = asset.get('ticker')
+            if ticker:
+                tickers.append(ticker)
+    
+    # Force refresh tickers with a delay to avoid rate limiting
+    refresh_count = 0
+    for ticker in tickers:
+        try:
+            # Clear existing cache
+            cache_file = os.path.join(CACHE_DIR, f"{ticker.replace('/', '_').replace(':', '_')}.json")
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+                
+            # Add a delay to avoid rate limiting
+            time.sleep(random.uniform(1.0, 3.0))
+                
+            # Fetch fresh data
+            current_price, _ = fetch_price_safely(ticker)
+            if current_price > 0:
+                refresh_count += 1
+        except Exception as e:
+            print(f"Error refreshing data for {ticker}: {e}")
+    
+    flash(f'Marktdaten für {refresh_count} Assets wurden aktualisiert', 'success')
     return redirect(url_for('portfolio.index'))
 
 @bp.route('/delete_asset/<asset_class>/<int:index>', methods=['POST'])
@@ -432,6 +618,32 @@ def edit_asset(asset_class, index):
         
         if asset_class != 'savings':
             if ticker:
+                old_ticker = asset.get('ticker', '')
+                # Only update cache if ticker has changed
+                if ticker != old_ticker:
+                    # Pre-fetch and cache if needed
+                    if not is_cache_fresh(ticker):
+                        try:
+                            # Introduce a random delay to avoid rate limiting
+                            time.sleep(random.uniform(0.5, 2.0))
+                            
+                            ticker_obj = yf.Ticker(ticker)
+                            history = ticker_obj.history(period="1d")
+                            
+                            if not history.empty:
+                                current_price = float(history['Close'].iloc[-1])
+                                
+                                # Create and save cache data
+                                cache_data = {
+                                    'ticker': ticker,
+                                    'last_close': current_price,
+                                    'last_date': datetime.now().strftime('%Y-%m-%d'),
+                                    'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                }
+                                update_cache(ticker, cache_data)
+                        except Exception as e:
+                            print(f"Failed to pre-fetch ticker data for {ticker}: {e}")
+                
                 asset['ticker'] = ticker
             if isin:
                 asset['isin'] = isin

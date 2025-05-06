@@ -26,6 +26,10 @@
     .badge-loss {
         background-color: #dc3545;
     }
+    .earnings-chart-container {
+        height: 350px;
+        margin-top: 20px;
+    }
 </style>
 {% endblock %}
 
@@ -116,6 +120,24 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Performance/Earnings Chart -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Performance-Analyse</h5>
+        </div>
+        <div class="card-body">
+            {% if performance_data and performance_data.labels %}
+            <div class="earnings-chart-container">
+                <canvas id="earningsChart"></canvas>
+            </div>
+            {% else %}
+            <div class="d-flex justify-content-center align-items-center py-5">
+                <p class="text-muted">Keine Performance-Daten verfügbar</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -381,6 +403,93 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: {
                 legend: {
                     position: 'right'
+                }
+            }
+        }
+    });
+    {% endif %}
+    
+    {% if performance_data and performance_data.labels %}
+    // Chart für Performance/Earnings
+    const earningsCtx = document.getElementById('earningsChart').getContext('2d');
+    
+    const performanceData = {
+        labels: [
+            {% for label in performance_data.labels %}
+            '{{ label }}',
+            {% endfor %}
+        ],
+        datasets: [
+            {
+                label: 'Einstandswert',
+                data: [
+                    {% for cost in performance_data.acquisition_costs %}
+                    {{ cost }},
+                    {% endfor %}
+                ],
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            },
+            {
+                label: 'Aktueller Wert',
+                data: [
+                    {% for value in performance_data.current_values %}
+                    {{ value }},
+                    {% endfor %}
+                ],
+                backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            },
+            {
+                label: 'Gewinn/Verlust',
+                data: [
+                    {% for gl in performance_data.gains_losses %}
+                    {{ gl }},
+                    {% endfor %}
+                ],
+                backgroundColor: function(context) {
+                    const index = context.dataIndex;
+                    const value = context.dataset.data[index];
+                    return value < 0 ? 'rgba(255, 99, 132, 0.5)' : 'rgba(75, 192, 192, 0.5)';
+                },
+                borderColor: function(context) {
+                    const index = context.dataIndex;
+                    const value = context.dataset.data[index];
+                    return value < 0 ? 'rgba(255, 99, 132, 1)' : 'rgba(75, 192, 192, 1)';
+                },
+                borderWidth: 1,
+                type: 'bar'
+            }
+        ]
+    };
+    
+    new Chart(earningsCtx, {
+        type: 'bar',
+        data: performanceData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(context.parsed.y);
+                            }
+                            return label;
+                        }
+                    }
                 }
             }
         }

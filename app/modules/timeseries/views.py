@@ -3,10 +3,58 @@ import numpy as np
 import yfinance as yf
 import json
 import os
+import time
+import random
 from datetime import datetime, timedelta
 from flask import current_app
 from flask_login import current_user
 from app.models import PortfolioData
+
+# Create a simple file-based cache system
+CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'cache')
+if not os.path.exists(CACHE_DIR):
+    os.makedirs(CACHE_DIR)
+
+def get_cached_data(ticker):
+    """Get cached data for a ticker if it exists and is fresh"""
+    cache_file = os.path.join(CACHE_DIR, f"{ticker.replace('/', '_').replace(':', '_')}.json")
+    
+    if not os.path.exists(cache_file):
+        return None
+        
+    # Check if data is stale (older than 6 hours)
+    file_time = datetime.fromtimestamp(os.path.getmtime(cache_file))
+    time_diff = datetime.now() - file_time
+    if time_diff > timedelta(hours=6):
+        return None
+        
+    try:
+        with open(cache_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error reading cache file for {ticker}: {e}")
+        return None
+
+def update_cache(ticker, data):
+    """Update the cache for a ticker"""
+    cache_file = os.path.join(CACHE_DIR, f"{ticker.replace('/', '_').replace(':', '_')}.json")
+    
+    try:
+        with open(cache_file, 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"Error writing cache file for {ticker}: {e}")
+
+def is_cache_fresh(ticker):
+    """Check if the cache for a ticker is fresh (updated within the last 6 hours)"""
+    cache_file = os.path.join(CACHE_DIR, f"{ticker.replace('/', '_').replace(':', '_')}.json")
+    
+    if not os.path.exists(cache_file):
+        return False
+        
+    file_time = datetime.fromtimestamp(os.path.getmtime(cache_file))
+    time_diff = datetime.now() - file_time
+    return time_diff <= timedelta(hours=6)
 
 def get_available_securities():
     """Retrieves the portfolio data for the current user"""
@@ -174,105 +222,85 @@ def get_demo_portfolio_data():
         ]
     }
 
-def get_timeseries_data(ticker_symbol=None):
-    """Ruft Zeitreihendaten für das angegebene Ticker-Symbol ab."""
-    if ticker_symbol is None:
-        ticker_symbol = "EUNL.DE"  # Standard-Ticker, falls keiner angegeben
+def fetch_ticker_data_safely(ticker_symbol):
+    """Fetch ticker data with cache and rate limit protection"""
+    # Try to get data from cache first
+    cached_data = get_cached_data(ticker_symbol)
+    if cached_data:
+        print(f"Using cached data for {ticker_symbol}")
+        return cached_data
+    
+    # If data not in cache, need to fetch from API
+    print(f"Fetching fresh data for {ticker_symbol}")
+    
+    # Add random delay to avoid rate limiting
+    time.sleep(random.uniform(1.0, 3.0))
     
     try:
-        # Get portfolio data for the current user
-        portfolio_data = get_portfolio_data()
-        
-        # Wertpapierinformationen suchen
-        security_info = None
-        
-        # Alle Anlageklassen durchsuchen
-        for asset_class in ['etf', 'stocks', 'bonds', 'commodities', 'realEstate']:
-            for asset in portfolio_data.get(asset_class, []):
-                if asset.get('ticker') == ticker_symbol:
-                    security_info = asset
-                    break
-            if security_info:
-                break
-        
-        # Ticker-Objekt erstellen und historische Daten abrufen
+        # Create Ticker object and fetch history
         ticker = yf.Ticker(ticker_symbol)
         historical_data = ticker.history(period="max")
         
         if historical_data.empty:
             raise ValueError(f"Keine Daten für Ticker {ticker_symbol} gefunden")
             
+        # Process the data for storage/return
         historical_data.reset_index(inplace=True)
         
-        # Konvertiere Zeitstempel in JSON-serialisierbare Strings
-        dates = historical_data["Date"].dt.strftime('%Y-%m-%d').tolist()
-        
-        # Verwende die tatsächlichen Schlusskurse
-        values = historical_data["Close"].tolist()
-        
-        # Letzter Schlusskurs und Zeitstempel für die Berechnung des aktuellen Werts
-        last_close = values[-1] if values else 0
-        
-        # Zeitstempel des letzten Werts mit Datum und Uhrzeit
-        if len(historical_data) > 0:
-            last_date = historical_data["Date"].iloc[-1]
-            last_date_str = last_date.strftime('%Y-%m-%d')
-            
-            # Für die Anzeige mit Uhrzeit
-            # Yahoo Finance gibt lokale Börsenzeiten zurück, wir fügen die Uhrzeit hinzu,
-            # sofern sie verfügbar ist, sonst verwenden wir Börsenschluss
-            try:
-                # Versuchen, die Uhrzeit aus den Daten zu extrahieren
-                if 'Datetime' in historical_data.columns:
-                    last_datetime = historical_data["Datetime"].iloc[-1]
-                    last_datetime_str = last_datetime.strftime('%Y-%m-%d %H:%M:%S')
-                else:
-                    # Wenn keine Uhrzeit verfügbar ist, verwenden wir den Börsenschluss,
-                    # der je nach Börse variieren kann (typischerweise 17:30 Uhr für europäische Börsen)
-                    if security_info and security_info.get('currency') == 'USD':
-                        # US-Börsen schließen um 16:00 Uhr EST
-                        closing_time = "16:00"
-                    else:
-                        # Europäische Börsen schließen um 17:30 Uhr MEZ
-                        closing_time = "17:30"
-                    last_datetime_str = f"{last_date_str} {closing_time}"
-            except Exception as e:
-                print(f"Fehler beim Extrahieren der Uhrzeit: {e}")
-                last_datetime_str = f"{last_date_str} 00:00:00"
-        else:
-            last_date_str = "Unbekannt"
-            last_datetime_str = "Unbekannt"
-        
+        # Convert to digestible format
         result = {
-            'dates': dates,
-            'values': values,
-            'raw_data': historical_data,
+            'dates': historical_data["Date"].dt.strftime('%Y-%m-%d').tolist(),
+            'values': historical_data["Close"].tolist(),
+            'last_close': float(historical_data["Close"].iloc[-1]) if not historical_data.empty else 0,
+            'last_date': historical_data["Date"].iloc[-1].strftime('%Y-%m-%d') if not historical_data.empty else "Unknown",
             'ticker': ticker_symbol,
-            'last_close': last_close,
-            'last_date': last_date_str,
-            'last_datetime': last_datetime_str
+            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
-        # Portfolio-Informationen hinzufügen, falls vorhanden
-        if security_info:
-            result.update({
-                'name': security_info.get('name', ''),
-                'currency': security_info.get('currency', 'EUR'),
-                'isin': security_info.get('isin', ''),
-                'amount': security_info.get('amount', 0),
-                'acquisition_cost': security_info.get('acquisition_cost', 0)
-            })
-            
-            # Berechne den aktuellen Gesamtwert (letzter Schlusskurs × Anzahl)
-            result['current_value'] = last_close * security_info.get('amount', 0)
-            
-            # Gewinn/Verlust berechnen, falls Einstandswert vorhanden
-            if 'acquisition_cost' in security_info and security_info['acquisition_cost'] > 0:
-                result['gain_loss'] = result['current_value'] - security_info['acquisition_cost']
-                result['gain_loss_percent'] = (result['gain_loss'] / security_info['acquisition_cost']) * 100
+        # Add full datetime if available
+        if 'Datetime' in historical_data.columns and not historical_data.empty:
+            result['last_datetime'] = historical_data["Datetime"].iloc[-1].strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            # Default to date with standard closing time
+            result['last_datetime'] = f"{result['last_date']} 17:30:00"
+        
+        # Cache the data for future use
+        update_cache(ticker_symbol, result)
         
         return result
     
+    except Exception as e:
+        print(f"Error fetching data from API for {ticker_symbol}: {e}")
+        
+        # Create minimal fallback data
+        fallback_data = {
+            'ticker': ticker_symbol,
+            'error': str(e),
+            'last_date': datetime.now().strftime('%Y-%m-%d'),
+            'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        # For the fallback, we'll create some dummy data
+        current_datetime = datetime.now()
+        fallback_data['dates'] = [(current_datetime - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
+        fallback_data['values'] = [100 + i for i in range(30)]
+        fallback_data['last_close'] = 100 + 29  # Last dummy value
+        
+        return fallback_data
+
+def get_timeseries_data(ticker_symbol=None):
+    """Ruft Zeitreihendaten für das angegebene Ticker-Symbol ab mit Caching."""
+    if ticker_symbol is None:
+        ticker_symbol = "EUNL.DE"  # Standard-Ticker, falls keiner angegeben
+    
+    try:
+        # Get ticker data with caching and rate limit protection
+        ticker_data = fetch_ticker_data_safely(ticker_symbol)
+        
+        # Get portfolio-specific information
+        return update_with_portfolio_info(ticker_data, ticker_symbol)
+        
     except Exception as e:
         print(f"Fehler beim Abrufen der Daten für {ticker_symbol}: {e}")
         # Fallback mit Dummy-Daten
@@ -287,6 +315,64 @@ def get_timeseries_data(ticker_symbol=None):
             'last_date': current_datetime.strftime('%Y-%m-%d'),
             'last_datetime': current_datetime.strftime('%Y-%m-%d %H:%M:%S')
         }
+
+def update_with_portfolio_info(data, ticker_symbol):
+    """Updates the data with portfolio-specific information."""
+    try:
+        # Get portfolio data
+        portfolio_data = get_portfolio_data()
+        
+        # Find security info in portfolio
+        security_info = None
+        for asset_class in ['etf', 'stocks', 'bonds', 'commodities', 'realEstate']:
+            for asset in portfolio_data.get(asset_class, []):
+                if asset.get('ticker') == ticker_symbol:
+                    security_info = asset
+                    break
+            if security_info:
+                break
+                
+        # If we found security info, add it to the data
+        if security_info:
+            data.update({
+                'name': security_info.get('name', ''),
+                'currency': security_info.get('currency', 'EUR'),
+                'isin': security_info.get('isin', ''),
+                'amount': security_info.get('amount', 0),
+                'acquisition_cost': security_info.get('acquisition_cost', 0)
+            })
+            
+            # Calculate current value and gain/loss
+            last_close = data.get('last_close', 0)
+            amount = security_info.get('amount', 0)
+            data['current_value'] = last_close * amount
+            
+            # Calculate gain/loss if acquisition cost is available
+            if 'acquisition_cost' in security_info and security_info['acquisition_cost'] > 0:
+                data['gain_loss'] = data['current_value'] - security_info['acquisition_cost']
+                data['gain_loss_percent'] = (data['gain_loss'] / security_info['acquisition_cost']) * 100
+                
+                # Generate earnings data for visualization
+                acquisition_date = datetime.now() - timedelta(days=365)  # Assume purchase 1 year ago if unknown
+                if 'dates' in data and len(data['dates']) > 0:
+                    # Find the index where our data starts after acquisition date
+                    first_date = datetime.strptime(data['dates'][0], '%Y-%m-%d')
+                    if first_date < acquisition_date:
+                        acquisition_date = first_date
+                    
+                    # Create earnings data array (difference between current value and acquisition cost)
+                    earnings_values = []
+                    for value in data['values']:
+                        earnings = (value * amount) - security_info['acquisition_cost']
+                        earnings_values.append(earnings)
+                    
+                    data['earnings_values'] = earnings_values
+                
+        return data
+        
+    except Exception as e:
+        print(f"Error updating portfolio info: {e}")
+        return data
 
 def process_timeseries(params):
     # Ticker-Symbol aus den Parametern extrahieren
@@ -385,6 +471,18 @@ def process_timeseries(params):
         stats['gain_loss'] = data.get('gain_loss', 0)
         stats['gain_loss_percent'] = data.get('gain_loss_percent', 0)
     
+    # Prepare earnings data if available
+    earnings_values = None
+    if 'earnings_values' in data and len(data['earnings_values']) == len(data['values']):
+        # Filter earnings_values to match the timeframe
+        if len(data['earnings_values']) == len(data['dates']):
+            earnings_df = pd.DataFrame({
+                'date': pd.to_datetime(data['dates']),
+                'earnings': data['earnings_values']
+            })
+            filtered_earnings_df = earnings_df[earnings_df['date'] >= pd.Timestamp(start_date)]
+            earnings_values = filtered_earnings_df['earnings'].tolist()
+    
     # Ergebnisse zurückgeben
     result = {
         'dates': indicator_dates,
@@ -394,6 +492,10 @@ def process_timeseries(params):
         'stats': stats,
         'ticker': ticker_symbol  # Ticker-Symbol zurückgeben für Frontend-Anzeige
     }
+    
+    # Add earnings values if available
+    if earnings_values:
+        result['earnings_values'] = earnings_values
     
     # Zusätzliche Informationen aus data übernehmen
     for key in ['name', 'currency', 'isin', 'amount', 'acquisition_cost', 'current_value', 

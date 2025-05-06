@@ -78,6 +78,14 @@
                             <option value="bollinger">Bollinger Bands</option>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="showEarnings" checked>
+                            <label class="form-check-label" for="showEarnings">
+                                Gewinn/Verlust anzeigen
+                            </label>
+                        </div>
+                    </div>
                     <button type="submit" class="btn btn-primary w-100">
                         <i class="fas fa-sync-alt me-1"></i>Aktualisieren
                     </button>
@@ -127,6 +135,9 @@
                 <div class="last-update" id="last-update-info">
                     Stand: <span id="stat-last-date-full">-</span>
                 </div>
+                <div class="small text-muted mt-3">
+                    <i class="fas fa-info-circle"></i> Daten werden 4x täglich aktualisiert
+                </div>
             </div>
         </div>
     </div>
@@ -160,6 +171,7 @@ function analyzeData() {
     const selectedTicker = document.getElementById('ticker').value;
     const selectedTimeframe = document.getElementById('timeframe').value;
     const selectedIndicator = document.getElementById('indicator').value;
+    const showEarnings = document.getElementById('showEarnings').checked;
     
     // Währung für die Beschriftung der Y-Achse ermitteln
     const tickerElement = document.getElementById('ticker');
@@ -181,13 +193,13 @@ function analyzeData() {
     })
     .then(response => response.json())
     .then(data => {
-        plotTimeseries(data, currency);
+        plotTimeseries(data, currency, showEarnings);
         updateStatistics(data.stats, currency, data.last_datetime);
     })
     .catch(error => console.error('Error:', error));
 }
 
-function plotTimeseries(data, currency = 'EUR') {
+function plotTimeseries(data, currency = 'EUR', showEarnings = true) {
     const traces = [];
     
     // Name des Wertpapiers aus dem Dropdown ermitteln
@@ -208,6 +220,24 @@ function plotTimeseries(data, currency = 'EUR') {
         }
     };
     traces.push(mainTrace);
+    
+    // Gewinn/Verlust anzeigen, wenn verfügbar und aktiviert
+    if (showEarnings && data.earnings_values && data.earnings_values.length > 0) {
+        const earningsTrace = {
+            x: data.dates,
+            y: data.earnings_values,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Gewinn/Verlust',
+            line: {
+                color: '#28a745',
+                width: 2,
+                dash: 'dot'
+            },
+            yaxis: 'y2'
+        };
+        traces.push(earningsTrace);
+    }
     
     // Indikator hinzufügen
     if (data.indicator === 'sma' || data.indicator === 'ema') {
@@ -294,7 +324,7 @@ function plotTimeseries(data, currency = 'EUR') {
         },
         margin: {
             l: 50,
-            r: 20,
+            r: 60,
             t: 50,
             b: 50
         },
@@ -304,6 +334,18 @@ function plotTimeseries(data, currency = 'EUR') {
             y: 1
         }
     };
+    
+    // Zweite Y-Achse für Gewinn/Verlust hinzufügen, wenn gewünscht
+    if (showEarnings && data.earnings_values && data.earnings_values.length > 0) {
+        layout.yaxis2 = {
+            title: `Gewinn/Verlust (${currency})`,
+            titlefont: { color: '#28a745' },
+            tickfont: { color: '#28a745' },
+            overlaying: 'y',
+            side: 'right',
+            showgrid: false
+        };
+    }
     
     Plotly.newPlot('timeseries-chart', traces, layout, {responsive: true});
 }
