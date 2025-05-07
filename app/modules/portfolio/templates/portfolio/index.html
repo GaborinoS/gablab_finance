@@ -30,6 +30,22 @@
         height: 350px;
         margin-top: 20px;
     }
+    .clickable-row {
+        cursor: pointer;
+    }
+    .clickable-row:hover {
+        background-color: rgba(0, 123, 255, 0.1);
+    }
+    .clickable-row.selected {
+        background-color: rgba(0, 123, 255, 0.2);
+    }
+    #noAssetSelectedMessage {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 350px;
+        color: #6c757d;
+    }
 </style>
 {% endblock %}
 
@@ -127,17 +143,19 @@
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-primary text-white">
             <h5 class="mb-0">Performance-Analyse</h5>
+            <small class="text-white-50">Klicken Sie auf ein Asset in den Tabellen unten, um dessen Performance anzuzeigen</small>
         </div>
         <div class="card-body">
-            {% if performance_data and performance_data.labels %}
-            <div class="earnings-chart-container">
+            <div id="earningsChartContainer" class="earnings-chart-container" style="display: none;">
                 <canvas id="earningsChart"></canvas>
             </div>
-            {% else %}
-            <div class="d-flex justify-content-center align-items-center py-5">
-                <p class="text-muted">Keine Performance-Daten verfügbar</p>
+            <div id="noAssetSelectedMessage">
+                <div class="text-center">
+                    <i class="fas fa-chart-line fa-3x mb-3"></i>
+                    <h4>Wählen Sie ein Asset aus der Tabelle</h4>
+                    <p>Klicken Sie auf eine Zeile in den Asset-Tabellen unten, um dessen Performance zu analysieren.</p>
+                </div>
             </div>
-            {% endif %}
         </div>
     </div>
 
@@ -165,7 +183,15 @@
                     </thead>
                     <tbody>
                         {% for etf in portfolio.etf %}
-                        <tr>
+                        <tr class="clickable-row" 
+                            data-asset-type="etf" 
+                            data-asset-index="{{ loop.index0 }}" 
+                            data-asset-name="{{ etf.name }}"
+                            data-asset-ticker="{{ etf.ticker }}"
+                            data-acquisition-cost="{{ etf.acquisition_cost }}"
+                            data-current-value="{{ etf.current_value if etf.current_value is defined else 0 }}"
+                            data-gain-loss="{{ etf.gain_loss if etf.gain_loss is defined else 0 }}"
+                            data-currency="{{ etf.currency }}">
                             <td>{{ etf.name }}</td>
                             <td>{{ etf.ticker }}</td>
                             <td>{{ etf.amount }}</td>
@@ -242,7 +268,15 @@
                     </thead>
                     <tbody>
                         {% for stock in portfolio.stocks %}
-                        <tr>
+                        <tr class="clickable-row" 
+                            data-asset-type="stocks" 
+                            data-asset-index="{{ loop.index0 }}" 
+                            data-asset-name="{{ stock.name }}" 
+                            data-asset-ticker="{{ stock.ticker }}"
+                            data-acquisition-cost="{{ stock.acquisition_cost }}"
+                            data-current-value="{{ stock.current_value if stock.current_value is defined else 0 }}"
+                            data-gain-loss="{{ stock.gain_loss if stock.gain_loss is defined else 0 }}"
+                            data-currency="{{ stock.currency }}">
                             <td>{{ stock.name }}</td>
                             <td>{{ stock.ticker }}</td>
                             <td>{{ stock.amount }}</td>
@@ -319,7 +353,14 @@
                     </thead>
                     <tbody>
                         {% for saving in portfolio.savings %}
-                        <tr>
+                        <tr class="clickable-row" 
+                            data-asset-type="savings" 
+                            data-asset-index="{{ loop.index0 }}" 
+                            data-asset-name="{{ saving.name }}"
+                            data-acquisition-cost="{{ saving.acquisition_cost }}"
+                            data-current-value="{{ saving.amount }}"
+                            data-gain-loss="{{ saving.gain_loss if saving.gain_loss is defined else 0 }}"
+                            data-currency="{{ saving.currency }}">
                             <td>{{ saving.name }}</td>
                             <td>{{ "%.2f"|format(saving.amount) }}</td>
                             <td>{{ "%.2f"|format(saving.acquisition_cost) }}</td>
@@ -366,6 +407,12 @@
         </div>
     </div>
 </div>
+
+<!-- Hidden container to store performance data for JavaScript access -->
+<div id="performanceDataContainer" style="display: none;" 
+     data-performance='{{ performance_data|tojson }}'>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -409,92 +456,128 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     {% endif %}
     
-    {% if performance_data and performance_data.labels %}
-    // Chart für Performance/Earnings
+    // Variables for the earnings chart
+    let earningsChart = null;
+    const earningsChartContainer = document.getElementById('earningsChartContainer');
+    const noAssetSelectedMessage = document.getElementById('noAssetSelectedMessage');
     const earningsCtx = document.getElementById('earningsChart').getContext('2d');
     
-    const performanceData = {
-        labels: [
-            {% for label in performance_data.labels %}
-            '{{ label }}',
-            {% endfor %}
-        ],
-        datasets: [
-            {
-                label: 'Einstandswert',
-                data: [
-                    {% for cost in performance_data.acquisition_costs %}
-                    {{ cost }},
-                    {% endfor %}
-                ],
-                backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1
-            },
-            {
-                label: 'Aktueller Wert',
-                data: [
-                    {% for value in performance_data.current_values %}
-                    {{ value }},
-                    {% endfor %}
-                ],
-                backgroundColor: 'rgba(75, 192, 192, 0.5)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1
-            },
-            {
-                label: 'Gewinn/Verlust',
-                data: [
-                    {% for gl in performance_data.gains_losses %}
-                    {{ gl }},
-                    {% endfor %}
-                ],
-                backgroundColor: function(context) {
-                    const index = context.dataIndex;
-                    const value = context.dataset.data[index];
-                    return value < 0 ? 'rgba(255, 99, 132, 0.5)' : 'rgba(75, 192, 192, 0.5)';
-                },
-                borderColor: function(context) {
-                    const index = context.dataIndex;
-                    const value = context.dataset.data[index];
-                    return value < 0 ? 'rgba(255, 99, 132, 1)' : 'rgba(75, 192, 192, 1)';
-                },
-                borderWidth: 1,
-                type: 'bar'
-            }
-        ]
-    };
+    // Get the performance data
+    let performanceData = null;
+    try {
+        const performanceDataContainer = document.getElementById('performanceDataContainer');
+        if (performanceDataContainer) {
+            performanceData = JSON.parse(performanceDataContainer.dataset.performance);
+        }
+    } catch (e) {
+        console.error('Error parsing performance data:', e);
+    }
     
-    new Chart(earningsCtx, {
-        type: 'bar',
-        data: performanceData,
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: false
+    // Add click event listeners to all clickable rows
+    const clickableRows = document.querySelectorAll('.clickable-row');
+    clickableRows.forEach(row => {
+        row.addEventListener('click', function() {
+            // Remove selected class from all rows
+            clickableRows.forEach(r => r.classList.remove('selected'));
+            
+            // Add selected class to the clicked row
+            this.classList.add('selected');
+            
+            // Extract asset data from the clicked row
+            const assetType = this.dataset.assetType;
+            const assetIndex = this.dataset.assetIndex;
+            const assetName = this.dataset.assetName;
+            const assetTicker = this.dataset.assetTicker || '';
+            const acquisitionCost = parseFloat(this.dataset.acquisitionCost) || 0;
+            const currentValue = parseFloat(this.dataset.currentValue) || 0;
+            const gainLoss = parseFloat(this.dataset.gainLoss) || 0;
+            const currency = this.dataset.currency || 'EUR';
+            
+            // Display the earnings chart
+            showAssetPerformanceChart(assetName, assetTicker, acquisitionCost, currentValue, gainLoss, currency);
+        });
+    });
+    
+    function showAssetPerformanceChart(assetName, assetTicker, acquisitionCost, currentValue, gainLoss, currency) {
+        // Show the chart container and hide the message
+        earningsChartContainer.style.display = 'block';
+        noAssetSelectedMessage.style.display = 'none';
+        
+        // Destroy the previous chart if it exists
+        if (earningsChart) {
+            earningsChart.destroy();
+        }
+        
+        // Create data for the selected asset
+        const chartData = {
+            labels: [assetName],
+            datasets: [
+                {
+                    label: 'Einstandswert',
+                    data: [acquisitionCost],
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Aktueller Wert',
+                    data: [currentValue],
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Gewinn/Verlust',
+                    data: [gainLoss],
+                    backgroundColor: gainLoss < 0 ? 'rgba(255, 99, 132, 0.5)' : 'rgba(75, 192, 192, 0.5)',
+                    borderColor: gainLoss < 0 ? 'rgba(255, 99, 132, 1)' : 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1,
+                    type: 'bar'
                 }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
+            ]
+        };
+        
+        // Create the chart
+        earningsChart = new Chart(earningsCtx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Performance von ${assetName} ${assetTicker ? '(' + assetTicker + ')' : ''}`,
+                        font: {
+                            size: 16
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += new Intl.NumberFormat('de-DE', { style: 'currency', currency: currency }).format(context.parsed.y);
+                                }
+                                return label;
                             }
-                            if (context.parsed.y !== null) {
-                                label += new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(context.parsed.y);
-                            }
-                            return label;
                         }
                     }
                 }
             }
-        }
-    });
-    {% endif %}
+        });
+        
+        // Scroll to the chart
+        earningsChartContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 });
 </script>
 {% endblock %}

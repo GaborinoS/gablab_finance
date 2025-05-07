@@ -71,19 +71,28 @@ def fetch_price_safely(ticker_symbol):
     try:
         print(f"Fetching fresh data for {ticker_symbol}")
         ticker = yf.Ticker(ticker_symbol)
-        history = ticker.history(period="1d")
+        
+        # Fetch complete historical data instead of just 1 day
+        history = ticker.history(period="max")
         
         if not history.empty:
             current_price = float(history['Close'].iloc[-1])
             
-            # Create cache data
+            # Convert dates to string format for JSON serialization
+            history.reset_index(inplace=True)
+            dates = history["Date"].dt.strftime('%Y-%m-%d').tolist()
+            close_values = history["Close"].tolist()
+            
+            # Create cache data with full timeseries
             cache_data = {
                 'ticker': ticker_symbol,
                 'last_close': current_price,
-                'last_date': datetime.now().strftime('%Y-%m-%d'),
+                'last_date': history["Date"].iloc[-1].strftime('%Y-%m-%d'),
                 'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'dates': [datetime.now().strftime('%Y-%m-%d')],  # Minimal date array
-                'values': [float(current_price)]  # Minimal values array
+                'dates': dates,
+                'values': [float(val) for val in close_values],
+                'full_history': True,
+                'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
             
             # Update cache
@@ -100,7 +109,10 @@ def fetch_price_safely(ticker_symbol):
                 'last_date': datetime.now().strftime('%Y-%m-%d'),
                 'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'dates': [datetime.now().strftime('%Y-%m-%d')],
-                'values': [100.0]
+                'values': [100.0],
+                'full_history': False,
+                'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'error': 'No data found'
             }
             
             # Update cache with fallback data
@@ -117,13 +129,17 @@ def fetch_price_safely(ticker_symbol):
             'last_date': datetime.now().strftime('%Y-%m-%d'),
             'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'dates': [datetime.now().strftime('%Y-%m-%d')],
-            'values': [100.0]
+            'values': [100.0],
+            'full_history': False,
+            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'error': str(e)
         }
         
         # Update cache with fallback data
         update_cache(ticker_symbol, fallback_data)
         
         return 0, fallback_data
+
 @bp.route('/')
 @login_required
 def index():
@@ -440,18 +456,29 @@ def add_asset():
                     time.sleep(random.uniform(0.5, 2.0))
                     
                     ticker_obj = yf.Ticker(ticker)
-                    history = ticker_obj.history(period="1d")
+                    # Fetch complete historical data instead of just 1 day
+                    history = ticker_obj.history(period="max")
                     
                     if not history.empty:
                         current_price = float(history['Close'].iloc[-1])
                         
-                        # Create and save cache data
+                        # Convert dates to string format for JSON serialization
+                        history.reset_index(inplace=True)
+                        dates = history["Date"].dt.strftime('%Y-%m-%d').tolist()
+                        close_values = history["Close"].tolist()
+                        
+                        # Create cache data with full timeseries
                         cache_data = {
                             'ticker': ticker,
                             'last_close': current_price,
-                            'last_date': datetime.now().strftime('%Y-%m-%d'),
-                            'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            'last_date': history["Date"].iloc[-1].strftime('%Y-%m-%d'),
+                            'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            'dates': dates,
+                            'values': [float(val) for val in close_values],
+                            'full_history': True,
+                            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         }
+                        
                         update_cache(ticker, cache_data)
                 except Exception as e:
                     print(f"Failed to pre-fetch ticker data for {ticker}: {e}")
@@ -474,7 +501,6 @@ def add_asset():
         return redirect(url_for('portfolio.index'))
     
     return render_template('portfolio/add_asset.html')
-
 
 @bp.route('/refresh')
 @login_required
@@ -628,18 +654,29 @@ def edit_asset(asset_class, index):
                             time.sleep(random.uniform(0.5, 2.0))
                             
                             ticker_obj = yf.Ticker(ticker)
-                            history = ticker_obj.history(period="1d")
+                            # Fetch complete historical data instead of just 1 day
+                            history = ticker_obj.history(period="max")
                             
                             if not history.empty:
                                 current_price = float(history['Close'].iloc[-1])
                                 
-                                # Create and save cache data
+                                # Convert dates to string format for JSON serialization
+                                history.reset_index(inplace=True)
+                                dates = history["Date"].dt.strftime('%Y-%m-%d').tolist()
+                                close_values = history["Close"].tolist()
+                                
+                                # Create cache data with full timeseries
                                 cache_data = {
                                     'ticker': ticker,
                                     'last_close': current_price,
-                                    'last_date': datetime.now().strftime('%Y-%m-%d'),
-                                    'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                    'last_date': history["Date"].iloc[-1].strftime('%Y-%m-%d'),
+                                    'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                    'dates': dates,
+                                    'values': [float(val) for val in close_values],
+                                    'full_history': True,
+                                    'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                                 }
+                                
                                 update_cache(ticker, cache_data)
                         except Exception as e:
                             print(f"Failed to pre-fetch ticker data for {ticker}: {e}")

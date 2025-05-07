@@ -249,13 +249,25 @@ def fetch_ticker_data_safely(ticker_symbol):
         
         # Convert to digestible format
         result = {
+            'ticker': ticker_symbol,
             'dates': historical_data["Date"].dt.strftime('%Y-%m-%d').tolist(),
-            'values': historical_data["Close"].tolist(),
+            'values': [float(val) for val in historical_data["Close"].tolist()],
             'last_close': float(historical_data["Close"].iloc[-1]) if not historical_data.empty else 0,
             'last_date': historical_data["Date"].iloc[-1].strftime('%Y-%m-%d') if not historical_data.empty else "Unknown",
-            'ticker': ticker_symbol,
-            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'full_history': True
         }
+        
+        # Save additional data if available
+        if not historical_data.empty:
+            if 'Open' in historical_data.columns:
+                result['open_values'] = [float(val) for val in historical_data["Open"].tolist()]
+            if 'High' in historical_data.columns:
+                result['high_values'] = [float(val) for val in historical_data["High"].tolist()]
+            if 'Low' in historical_data.columns:
+                result['low_values'] = [float(val) for val in historical_data["Low"].tolist()]
+            if 'Volume' in historical_data.columns:
+                result['volume_values'] = [float(val) if not pd.isna(val) else 0 for val in historical_data["Volume"].tolist()]
         
         # Add full datetime if available
         if 'Datetime' in historical_data.columns and not historical_data.empty:
@@ -272,20 +284,37 @@ def fetch_ticker_data_safely(ticker_symbol):
     except Exception as e:
         print(f"Error fetching data from API for {ticker_symbol}: {e}")
         
-        # Create minimal fallback data
+        # Create fallback data with dummy values
+        current_datetime = datetime.now()
+        dates = [(current_datetime - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(365, 0, -1)]
+        close_values = [100 + (i % 20) + (i // 20) for i in range(365)]  # Generate some pattern
+        
         fallback_data = {
             'ticker': ticker_symbol,
+            'dates': dates,
+            'values': close_values,
+            'last_close': close_values[-1],
+            'last_date': dates[-1],
+            'last_datetime': f"{dates[-1]} 17:30:00",
+            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'full_history': True,
             'error': str(e),
-            'last_date': datetime.now().strftime('%Y-%m-%d'),
-            'last_datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'is_fallback': True
         }
         
-        # For the fallback, we'll create some dummy data
-        current_datetime = datetime.now()
-        fallback_data['dates'] = [(current_datetime - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
-        fallback_data['values'] = [100 + i for i in range(30)]
-        fallback_data['last_close'] = 100 + 29  # Last dummy value
+        # Add more realistic OHLC data
+        open_values = [val * (1 - random.uniform(-0.01, 0.01)) for val in close_values]
+        high_values = [max(o, c) * (1 + random.uniform(0, 0.02)) for o, c in zip(open_values, close_values)]
+        low_values = [min(o, c) * (1 - random.uniform(0, 0.02)) for o, c in zip(open_values, close_values)]
+        volume_values = [random.randint(10000, 1000000) for _ in range(365)]
+        
+        fallback_data['open_values'] = open_values
+        fallback_data['high_values'] = high_values
+        fallback_data['low_values'] = low_values
+        fallback_data['volume_values'] = volume_values
+        
+        # Cache the fallback data too, but with shorter expiry
+        update_cache(ticker_symbol, fallback_data)
         
         return fallback_data
 
@@ -298,6 +327,21 @@ def get_timeseries_data(ticker_symbol=None):
         # Get ticker data with caching and rate limit protection
         ticker_data = fetch_ticker_data_safely(ticker_symbol)
         
+        # Verify that we have full timeseries data
+        if not ticker_data.get('full_history', False) or not ticker_data.get('dates') or not ticker_data.get('values'):
+            print(f"Cache for {ticker_symbol} does not contain full history data. Refreshing...")
+            
+            # Force a refresh of the data
+            cache_file = os.path.join(CACHE_DIR, f"{ticker_symbol.replace('/', '_').replace(':', '_')}.json")
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+                
+            # Add a delay to avoid rate limiting
+            time.sleep(random.uniform(0.5, 2.0))
+                
+            # Fetch fresh data with full history
+            ticker_data = fetch_ticker_data_safely(ticker_symbol)
+        
         # Get portfolio-specific information
         return update_with_portfolio_info(ticker_data, ticker_symbol)
         
@@ -305,15 +349,20 @@ def get_timeseries_data(ticker_symbol=None):
         print(f"Fehler beim Abrufen der Daten für {ticker_symbol}: {e}")
         # Fallback mit Dummy-Daten
         current_datetime = datetime.now()
-        dummy_dates = [(current_datetime - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
-        dummy_values = [100 + i for i in range(30)]
+        dummy_dates = [(current_datetime - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(365, 0, -1)]
+        dummy_values = [100 + (i % 20) + (i // 20) for i in range(365)]  # Generate some pattern
+        
         return {
+            'ticker': ticker_symbol,
             'dates': dummy_dates,
             'values': dummy_values,
-            'ticker': ticker_symbol,
+            'last_close': dummy_values[-1],
+            'last_date': dummy_dates[-1],
+            'last_datetime': f"{dummy_dates[-1]} 17:30:00",
+            'fetch_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'full_history': True,
             'error': str(e),
-            'last_date': current_datetime.strftime('%Y-%m-%d'),
-            'last_datetime': current_datetime.strftime('%Y-%m-%d %H:%M:%S')
+            'is_fallback': True
         }
 
 def update_with_portfolio_info(data, ticker_symbol):
@@ -352,21 +401,27 @@ def update_with_portfolio_info(data, ticker_symbol):
                 data['gain_loss'] = data['current_value'] - security_info['acquisition_cost']
                 data['gain_loss_percent'] = (data['gain_loss'] / security_info['acquisition_cost']) * 100
                 
-                # Generate earnings data for visualization
-                acquisition_date = datetime.now() - timedelta(days=365)  # Assume purchase 1 year ago if unknown
-                if 'dates' in data and len(data['dates']) > 0:
-                    # Find the index where our data starts after acquisition date
-                    first_date = datetime.strptime(data['dates'][0], '%Y-%m-%d')
-                    if first_date < acquisition_date:
-                        acquisition_date = first_date
+                # Generate earnings data for visualization (performance relative to acquisition cost over time)
+                if 'values' in data and len(data['values']) > 0:
+                    # Ensure we have the values as float
+                    values = [float(val) for val in data['values']]
                     
-                    # Create earnings data array (difference between current value and acquisition cost)
+                    # Calculate earnings for each point in time (current value - acquisition cost)
                     earnings_values = []
-                    for value in data['values']:
+                    for value in values:
                         earnings = (value * amount) - security_info['acquisition_cost']
                         earnings_values.append(earnings)
                     
                     data['earnings_values'] = earnings_values
+                    
+                    # Add relative performance to the acquisition cost (percentage gain/loss)
+                    performance_percent = []
+                    for value in values:
+                        current_value = value * amount
+                        perf = ((current_value / security_info['acquisition_cost']) - 1) * 100 if security_info['acquisition_cost'] > 0 else 0
+                        performance_percent.append(perf)
+                    
+                    data['performance_percent'] = performance_percent
                 
         return data
         
@@ -381,10 +436,24 @@ def process_timeseries(params):
     # Daten für das ausgewählte Wertpapier abrufen
     data = get_timeseries_data(ticker_symbol)
     
+    # Sicherstellen, dass wir Daten haben und diese in ein DataFrame konvertieren
+    if not data.get('dates') or not data.get('values') or len(data['dates']) != len(data['values']):
+        raise ValueError(f"Unvollständige Daten für {ticker_symbol}")
+    
     df = pd.DataFrame({
         'date': pd.to_datetime(data['dates']),
         'value': data['values']
     })
+    
+    # Zusätzliche OHLC-Daten hinzufügen, wenn verfügbar
+    if 'open_values' in data and len(data['open_values']) == len(data['dates']):
+        df['open'] = data['open_values']
+    if 'high_values' in data and len(data['high_values']) == len(data['dates']):
+        df['high'] = data['high_values']
+    if 'low_values' in data and len(data['low_values']) == len(data['dates']):
+        df['low'] = data['low_values']
+    if 'volume_values' in data and len(data['volume_values']) == len(data['dates']):
+        df['volume'] = data['volume_values']
     
     # Nach Zeitraum filtern
     timeframe = params.get('timeframe', '1y')
@@ -402,6 +471,10 @@ def process_timeseries(params):
         start_date = df['date'].min()
     
     filtered_df = df[df['date'] >= pd.Timestamp(start_date)]
+    
+    # Wenn nach dem Filtern keine Daten übrig sind, einen Fehler ausgeben
+    if filtered_df.empty:
+        raise ValueError(f"Keine Daten für {ticker_symbol} im ausgewählten Zeitraum")
     
     # Indikator berechnen
     indicator = params.get('indicator', 'sma')
@@ -448,11 +521,27 @@ def process_timeseries(params):
     
     # Statistiken berechnen
     stats = {
-        'mean': filtered_df['value'].mean(),
-        'std': filtered_df['value'].std(),
-        'min': filtered_df['value'].min(),
-        'max': filtered_df['value'].max()
+        'mean': float(filtered_df['value'].mean()),
+        'std': float(filtered_df['value'].std()),
+        'min': float(filtered_df['value'].min()),
+        'max': float(filtered_df['value'].max()),
+        'latest': float(filtered_df['value'].iloc[-1]) if not filtered_df.empty else 0,
+        'first': float(filtered_df['value'].iloc[0]) if not filtered_df.empty else 0,
+        'change': float(filtered_df['value'].iloc[-1] - filtered_df['value'].iloc[0]) if not filtered_df.empty else 0,
+        'change_percent': float((filtered_df['value'].iloc[-1] / filtered_df['value'].iloc[0] - 1) * 100) if not filtered_df.empty and filtered_df['value'].iloc[0] > 0 else 0,
+        'data_points': len(filtered_df)
     }
+    
+    # OHLC Statistiken hinzufügen, wenn verfügbar
+    if 'open' in filtered_df.columns:
+        stats['open_latest'] = float(filtered_df['open'].iloc[-1]) if not filtered_df.empty else 0
+    if 'high' in filtered_df.columns:
+        stats['high_max'] = float(filtered_df['high'].max()) if not filtered_df.empty else 0
+    if 'low' in filtered_df.columns:
+        stats['low_min'] = float(filtered_df['low'].min()) if not filtered_df.empty else 0
+    if 'volume' in filtered_df.columns:
+        stats['volume_avg'] = float(filtered_df['volume'].mean()) if not filtered_df.empty else 0
+        stats['volume_latest'] = float(filtered_df['volume'].iloc[-1]) if not filtered_df.empty else 0
     
     # Portfolio-Informationen in die Statistiken einfügen
     if 'amount' in data:
@@ -490,8 +579,22 @@ def process_timeseries(params):
         'indicator': indicator,
         'indicator_values': indicator_values,
         'stats': stats,
-        'ticker': ticker_symbol  # Ticker-Symbol zurückgeben für Frontend-Anzeige
+        'ticker': ticker_symbol,  # Ticker-Symbol zurückgeben für Frontend-Anzeige
+        'timeframe': timeframe,
+        'full_history': data.get('full_history', False),
+        'start_date': start_date.strftime('%Y-%m-%d'),
+        'end_date': end_date.strftime('%Y-%m-%d')
     }
+    
+    # OHLC-Daten hinzufügen, wenn verfügbar
+    if 'open' in filtered_df.columns:
+        result['open_values'] = filtered_df['open'].tolist()
+    if 'high' in filtered_df.columns:
+        result['high_values'] = filtered_df['high'].tolist()
+    if 'low' in filtered_df.columns:
+        result['low_values'] = filtered_df['low'].tolist()
+    if 'volume' in filtered_df.columns:
+        result['volume_values'] = filtered_df['volume'].tolist()
     
     # Add earnings values if available
     if earnings_values:
@@ -499,7 +602,7 @@ def process_timeseries(params):
     
     # Zusätzliche Informationen aus data übernehmen
     for key in ['name', 'currency', 'isin', 'amount', 'acquisition_cost', 'current_value', 
-                'gain_loss', 'gain_loss_percent', 'last_date', 'last_datetime']:
+                'gain_loss', 'gain_loss_percent', 'last_date', 'last_datetime', 'fetch_time']:
         if key in data:
             result[key] = data[key]
     
