@@ -1,2 +1,48 @@
 app/data/*
 !app/data/.gitkeep
+
+# Instance directory - contains local database
+/instance/
+
+# Python bytecode files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+.env/
+
+# IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Local environment files
+.env
+.env.local
+
+# Log files
+*.log
+
+# Database files
+*.db
+*.sqlite3
+
+# Cache files
+app/cache/*.json
+
+# Operating system files
+.DS_Store
+Thumbs.db
