@@ -19,6 +19,7 @@ def home():
                 'url': '/auth/register',
                 'icon': 'user-plus'
             }
+            
         ]
     else:
         modules = [

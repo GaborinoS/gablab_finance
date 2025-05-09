@@ -40,6 +40,14 @@
                         <div class="text-danger">{{ error }}</div>
                         {% endfor %}
                     </div>
+                    <div class="mb-3">
+                        {{ form.master_password.label(class="form-label") }}
+                        {{ form.master_password(class="form-control") }}
+                        <small class="form-text text-muted">Sie benötigen ein Master-Passwort, um sich registrieren zu können. Bitte wenden Sie sich an den Administrator.</small>
+                        {% for error in form.master_password.errors %}
+                        <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                    </div>
                     <div class="d-grid">
                         {{ form.submit(class="btn btn-primary") }}
                     </div>

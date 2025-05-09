@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - Eintrag bearbeiten{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-light">
+                <h2 class="mb-0">Eintrag bearbeiten</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('costincome.edit', entry_id=entry.id) }}">
+                    <div class="mb-3">
+                        <label class="form-label">Typ</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="type" id="type-income" value="income" {% if entry.type == 'income' %}checked{% endif %}>
+                            <label class="form-check-label text-success" for="type-income">
+                                <i class="fas fa-arrow-down me-1"></i>Einnahme
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="type" id="type-outcome" value="outcome" {% if entry.type == 'outcome' %}checked{% endif %}>
+                            <label class="form-check-label text-danger" for="type-outcome">
+                                <i class="fas fa-arrow-up me-1"></i>Ausgabe
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Datumsfeld -->
+                    <div class="mb-3">
+                        <label for="entry_date" class="form-label">Datum</label>
+                        <input type="date" class="form-control" id="entry_date" name="entry_date" value="{{ entry.date.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="amount" class="form-label">Betrag (€)</label>
+                        <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" value="{{ entry.amount }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Kategorie</label>
+                        <select class="form-select" id="category" name="category" required>
+                            <option value="" disabled>Kategorie auswählen</option>
+                            <!-- Einnahmen Kategorien -->
+                            <optgroup label="Einnahmen" id="income-categories">
+                                <option value="Gehalt" {% if entry.category == 'Gehalt' and entry.type == 'income' %}selected{% endif %}>Gehalt</option>
+                                <option value="Bonus" {% if entry.category == 'Bonus' and entry.type == 'income' %}selected{% endif %}>Bonus</option>
+                                <option value="Rückerstattung" {% if entry.category == 'Rückerstattung' and entry.type == 'income' %}selected{% endif %}>Rückerstattung</option>
+                                <option value="Investitionen" {% if entry.category == 'Investitionen' and entry.type == 'income' %}selected{% endif %}>Investitionen</option>
+                                <option value="Verkauf" {% if entry.category == 'Verkauf' and entry.type == 'income' %}selected{% endif %}>Verkauf</option>
+                                <option value="Sonstiges Einkommen" {% if entry.category == 'Sonstiges Einkommen' and entry.type == 'income' %}selected{% endif %}>Sonstiges Einkommen</option>
+                            </optgroup>
+                            <!-- Ausgaben Kategorien -->
+                            <optgroup label="Ausgaben" id="outcome-categories">
+                                <option value="Lebensmittel" {% if entry.category == 'Lebensmittel' and entry.type == 'outcome' %}selected{% endif %}>Lebensmittel</option>
+                                <option value="Wohnen" {% if entry.category == 'Wohnen' and entry.type == 'outcome' %}selected{% endif %}>Wohnen</option>
+                                <option value="Transport" {% if entry.category == 'Transport' and entry.type == 'outcome' %}selected{% endif %}>Transport</option>
+                                <option value="Versicherungen" {% if entry.category == 'Versicherungen' and entry.type == 'outcome' %}selected{% endif %}>Versicherungen</option>
+                                <option value="Gesundheit" {% if entry.category == 'Gesundheit' and entry.type == 'outcome' %}selected{% endif %}>Gesundheit</option>
+                                <option value="Bildung" {% if entry.category == 'Bildung' and entry.type == 'outcome' %}selected{% endif %}>Bildung</option>
+                                <option value="Freizeit" {% if entry.category == 'Freizeit' and entry.type == 'outcome' %}selected{% endif %}>Freizeit</option>
+                                <option value="Shopping" {% if entry.category == 'Shopping' and entry.type == 'outcome' %}selected{% endif %}>Shopping</option>
+                                <option value="Reisen" {% if entry.category == 'Reisen' and entry.type == 'outcome' %}selected{% endif %}>Reisen</option>
+                                <option value="Essen gehen" {% if entry.category == 'Essen gehen' and entry.type == 'outcome' %}selected{% endif %}>Essen gehen</option>
+                                <option value="Werkstatt" {% if entry.category == 'Werkstatt' and entry.type == 'outcome' %}selected{% endif %}>Werkstatt</option>
+                                <option value="Energie" {% if entry.category == 'Energie' and entry.type == 'outcome' %}selected{% endif %}>Energie</option>
+                                <option value="Kreditkarte" {% if entry.category == 'Kreditkarte' and entry.type == 'outcome' %}selected{% endif %}>Kreditkarte</option>
+                                <option value="Internet/Mobile" {% if entry.category == 'Internet/Mobile' and entry.type == 'outcome' %}selected{% endif %}>Internet/Mobile</option>
+                                <option value="Sonstige Ausgaben" {% if entry.category == 'Sonstige Ausgaben' and entry.type == 'outcome' %}selected{% endif %}>Sonstige Ausgaben</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Beschreibung (optional)</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">{{ entry.description }}</textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('costincome.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Zurück
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Speichern
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Function to filter categories based on selected type
+    function filterCategories() {
+        const typeIncome = document.getElementById('type-income');
+        const incomeCategories = document.getElementById('income-categories');
+        const outcomeCategories = document.getElementById('outcome-categories');
+        
+        if (typeIncome.checked) {
+            incomeCategories.style.display = 'block';
+            outcomeCategories.style.display = 'none';
+            
+            // Check if any income category is already selected
+            let hasSelectedIncome = false;
+            incomeCategories.querySelectorAll('option').forEach(option => {
+                if (option.selected) hasSelectedIncome = true;
+            });
+            
+            // If no income category selected, select the first one
+            if (!hasSelectedIncome) {
+                const firstIncomeOption = incomeCategories.querySelector('option:not([disabled])');
+                if (firstIncomeOption) firstIncomeOption.selected = true;
+            }
+        } else {
+            incomeCategories.style.display = 'none';
+            outcomeCategories.style.display = 'block';
+            
+            // Check if any outcome category is already selected
+            let hasSelectedOutcome = false;
+            outcomeCategories.querySelectorAll('option').forEach(option => {
+                if (option.selected) hasSelectedOutcome = true;
+            });
+            
+            // If no outcome category selected, select the first one
+            if (!hasSelectedOutcome) {
+                const firstOutcomeOption = outcomeCategories.querySelector('option:not([disabled])');
+                if (firstOutcomeOption) firstOutcomeOption.selected = true;
+            }
+        }
+    }
+    
+    // Initial filter
+    filterCategories();
+    
+    // Add event listeners
+    document.getElementById('type-income').addEventListener('change', filterCategories);
+    document.getElementById('type-outcome').addEventListener('change', filterCategories);
+});
+</script>
+{% endblock %}

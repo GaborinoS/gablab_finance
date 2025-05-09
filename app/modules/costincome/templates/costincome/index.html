@@ -55,6 +55,53 @@
         color: #dc3545;
         border: 1px solid #dc3545;
     }
+    /* Added styles for month selection */
+    .month-row {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .month-row:hover {
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+    .month-row.active {
+        background-color: rgba(13, 110, 253, 0.2);
+    }
+    .loader {
+        display: none;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 2s linear infinite;
+        margin: 0 auto;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .action-btn {
+        margin-left: 5px;
+    }
+    /* Modal styles */
+    .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+    #editEntryModal .modal-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+    #editEntryModal .modal-footer {
+        border-top: 1px solid #dee2e6;
+    }
+    /* Fix for modal jumping */
+    body.modal-open {
+        padding-right: 0 !important;
+        overflow: hidden;
+    }
+    #editEntryModal {
+        padding-right: 0 !important;
+    }
 </style>
 {% endblock %}
 
@@ -66,30 +113,35 @@
     </a>
 </div>
 
+<!-- Loading indicator -->
+<div id="loader" class="loader mt-3 mb-3"></div>
+
 <!-- Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card h-100 summary-card shadow-sm">
             <div class="card-body text-center">
-                <h5 class="card-title text-muted">Einnahmen ({{ current_month_name }})</h5>
-                <p class="display-6 income">{{ "%.2f"|format(income_total) }} €</p>
+                <h5 class="card-title text-muted">Einnahmen (<span id="current-month-name">{{ current_month_name }}</span>)</h5>
+                <p class="display-6 income" id="income-total">{{ "%.2f"|format(income_total) }} €</p>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card h-100 summary-card shadow-sm">
             <div class="card-body text-center">
-                <h5 class="card-title text-muted">Ausgaben ({{ current_month_name }})</h5>
-                <p class="display-6 outcome">{{ "%.2f"|format(outcome_total) }} €</p>
+                <h5 class="card-title text-muted">Ausgaben (<span id="current-month-name-2">{{ current_month_name }}</span>)</h5>
+                <p class="display-6 outcome" id="outcome-total">{{ "%.2f"|format(outcome_total) }} €</p>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card h-100 summary-card shadow-sm">
             <div class="card-body text-center">
-                <h5 class="card-title text-muted">Bilanz ({{ current_month_name }})</h5>
-                <p class="display-6 {% if balance >= 0 %}balance-positive{% else %}balance-negative{% endif %}">
-                    {{ "%.2f"|format(balance) }} €
+                <h5 class="card-title text-muted">Bilanz (<span id="current-month-name-3">{{ current_month_name }}</span>)</h5>
+                <p class="display-6" id="balance">
+                    <span class="{% if balance >= 0 %}balance-positive{% else %}balance-negative{% endif %}" id="balance-amount">
+                        {{ "%.2f"|format(balance) }} €
+                    </span>
                 </p>
             </div>
         </div>
@@ -133,9 +185,9 @@
                             <th class="text-end">Bilanz</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="monthly-stats-tbody">
                         {% for stat in monthly_stats %}
-                        <tr>
+                        <tr class="month-row" data-month-key="{{ stat.month_key }}">
                             <td>{{ stat.month }}</td>
                             <td class="text-end income">{{ "%.2f"|format(stat.income) }} €</td>
                             <td class="text-end outcome">{{ "%.2f"|format(stat.outcome) }} €</td>
@@ -150,6 +202,72 @@
             {% else %}
             <p class="text-center text-muted my-3">Keine Daten vorhanden</p>
             {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Income Categories -->
+    <div class="col-md-6">
+        <div class="card shadow-sm collapsible-card">
+            <div class="card-header bg-light card-header-clickable" data-bs-toggle="collapse" data-bs-target="#incomeCategoriesCollapse" aria-expanded="false">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Einnahmen nach Kategorien</h5>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+            <div class="collapse" id="incomeCategoriesCollapse">
+                <div class="card-body">
+                    <div id="income-categories-container">
+                        {% if income_by_category %}
+                        <div class="chart-container">
+                            <canvas id="incomeCategoryChart"></canvas>
+                        </div>
+                        <div class="mt-3" id="income-category-badges">
+                            {% for category, amount in income_by_category.items() %}
+                            <span class="badge rounded-pill category-badge category-income">
+                                {{ category }}: {{ "%.2f"|format(amount) }} €
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-center text-muted my-3">Keine Einnahmen Kategorien vorhanden</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Outcome Categories -->
+    <div class="col-md-6">
+        <div class="card shadow-sm collapsible-card">
+            <div class="card-header bg-light card-header-clickable" data-bs-toggle="collapse" data-bs-target="#outcomeCategoriesCollapse" aria-expanded="false">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Ausgaben nach Kategorien</h5>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+            <div class="collapse" id="outcomeCategoriesCollapse">
+                <div class="card-body">
+                    <div id="outcome-categories-container">
+                        {% if outcome_by_category %}
+                        <div class="chart-container">
+                            <canvas id="outcomeCategoryChart"></canvas>
+                        </div>
+                        <div class="mt-3" id="outcome-category-badges">
+                            {% for category, amount in outcome_by_category.items() %}
+                            <span class="badge rounded-pill category-badge category-outcome">
+                                {{ category }}: {{ "%.2f"|format(amount) }} €
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-center text-muted my-3">Keine Ausgaben Kategorien vorhanden</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -197,9 +315,9 @@
                             <th class="text-end">Aktionen</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="entries-table-body">
                         {% for entry in entries %}
-                        <tr data-month="{{ entry.date[:7] if entry.date is defined else '' }}" data-type="{{ entry.type }}">
+                        <tr data-month="{{ entry.date[:7] if entry.date is defined else '' }}" data-type="{{ entry.type }}" data-id="{{ entry.id }}">
                             <td>{{ entry.date }}</td>
                             <td>
                                 {% if entry.type == 'income' %}
@@ -214,9 +332,12 @@
                                 {{ "%.2f"|format(entry.amount) }} €
                             </td>
                             <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-primary edit-entry-btn" data-entry-id="{{ entry.id }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
                                 <form method="POST" action="{{ url_for('costincome.delete', entry_id=entry.id) }}" 
                                       class="d-inline" onsubmit="return confirm('Sind Sie sicher?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger action-btn">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </form>
@@ -234,63 +355,89 @@
 </div>
 
 <!-- Category totals (collapsible) -->
-<div class="row mt-4">
-    <!-- Income Categories -->
-    <div class="col-md-6">
-        <div class="card shadow-sm collapsible-card">
-            <div class="card-header bg-light card-header-clickable" data-bs-toggle="collapse" data-bs-target="#incomeCategoriesCollapse" aria-expanded="false">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Einnahmen nach Kategorien</h5>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
+
+
+<!-- Edit Entry Modal -->
+<div class="modal fade" id="editEntryModal" tabindex="-1" aria-labelledby="editEntryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editEntryModalLabel">Eintrag bearbeiten</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="collapse" id="incomeCategoriesCollapse">
-                <div class="card-body">
-                    {% if income_by_category %}
-                    <div class="chart-container">
-                        <canvas id="incomeCategoryChart"></canvas>
+            <div class="modal-body">
+                <form id="editEntryForm">
+                    <input type="hidden" id="edit-entry-id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Typ</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="edit-type" id="edit-type-income" value="income">
+                            <label class="form-check-label text-success" for="edit-type-income">
+                                <i class="fas fa-arrow-down me-1"></i>Einnahme
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="edit-type" id="edit-type-outcome" value="outcome">
+                            <label class="form-check-label text-danger" for="edit-type-outcome">
+                                <i class="fas fa-arrow-up me-1"></i>Ausgabe
+                            </label>
+                        </div>
                     </div>
-                    <div class="mt-3">
-                        {% for category, amount in income_by_category.items() %}
-                        <span class="badge rounded-pill category-badge category-income">
-                            {{ category }}: {{ "%.2f"|format(amount) }} €
-                        </span>
-                        {% endfor %}
+                    
+                    <div class="mb-3">
+                        <label for="edit-entry-date" class="form-label">Datum</label>
+                        <input type="date" class="form-control" id="edit-entry-date" required>
                     </div>
-                    {% else %}
-                    <p class="text-center text-muted my-3">Keine Einnahmen Kategorien vorhanden</p>
-                    {% endif %}
-                </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-amount" class="form-label">Betrag (€)</label>
+                        <input type="number" class="form-control" id="edit-amount" step="0.01" min="0.01" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-category" class="form-label">Kategorie</label>
+                        <select class="form-select" id="edit-category" required>
+                            <option value="" disabled selected>Kategorie auswählen</option>
+                            <!-- Einnahmen Kategorien -->
+                            <optgroup label="Einnahmen" id="edit-income-categories">
+                                <option value="Gehalt">Gehalt</option>
+                                <option value="Bonus">Bonus</option>
+                                <option value="Rückerstattung">Rückerstattung</option>
+                                <option value="Investitionen">Investitionen</option>
+                                <option value="Verkauf">Verkauf</option>
+                                <option value="Sonstiges Einkommen">Sonstiges Einkommen</option>
+                            </optgroup>
+                            <!-- Ausgaben Kategorien -->
+                            <optgroup label="Ausgaben" id="edit-outcome-categories">
+                                <option value="Lebensmittel">Lebensmittel</option>
+                                <option value="Wohnen">Wohnen</option>
+                                <option value="Transport">Transport</option>
+                                <option value="Versicherungen">Versicherungen</option>
+                                <option value="Gesundheit">Gesundheit</option>
+                                <option value="Bildung">Bildung</option>
+                                <option value="Freizeit">Freizeit</option>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Reisen">Reisen</option>
+                                <option value="Essen gehen">Essen gehen</option>
+                                <option value="Werkstatt">Werkstatt</option>
+                                <option value="Energie">Energie</option>
+                                <option value="Kreditkarte">Kreditkarte</option>
+                                <option value="Internet/Mobile">Internet/Mobile</option>
+                                <option value="Sonstige Ausgaben">Sonstige Ausgaben</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-description" class="form-label">Beschreibung (optional)</label>
+                        <textarea class="form-control" id="edit-description" rows="3"></textarea>
+                    </div>
+                </form>
             </div>
-        </div>
-    </div>
-    
-    <!-- Outcome Categories -->
-    <div class="col-md-6">
-        <div class="card shadow-sm collapsible-card">
-            <div class="card-header bg-light card-header-clickable" data-bs-toggle="collapse" data-bs-target="#outcomeCategoriesCollapse" aria-expanded="false">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Ausgaben nach Kategorien</h5>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-            </div>
-            <div class="collapse" id="outcomeCategoriesCollapse">
-                <div class="card-body">
-                    {% if outcome_by_category %}
-                    <div class="chart-container">
-                        <canvas id="outcomeCategoryChart"></canvas>
-                    </div>
-                    <div class="mt-3">
-                        {% for category, amount in outcome_by_category.items() %}
-                        <span class="badge rounded-pill category-badge category-outcome">
-                            {{ category }}: {{ "%.2f"|format(amount) }} €
-                        </span>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <p class="text-center text-muted my-3">Keine Ausgaben Kategorien vorhanden</p>
-                    {% endif %}
-                </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="saveEditButton">Speichern</button>
             </div>
         </div>
     </div>
@@ -299,60 +446,591 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Toggle icon rotation for collapsible cards
-        document.querySelectorAll('.card-header-clickable').forEach(header => {
-            header.addEventListener('click', function() {
-                const icon = this.querySelector('.fas');
-                if (icon) {
-                    icon.classList.toggle('fa-chevron-down');
-                    icon.classList.toggle('fa-chevron-up');
-                }
-            });
-            
-            // Initialize the icon states based on collapse state
-            const collapseId = header.getAttribute('data-bs-target');
-            const collapseEl = document.querySelector(collapseId);
-            if (collapseEl && collapseEl.classList.contains('show')) {
-                const icon = header.querySelector('.fas');
-                if (icon) {
-                    icon.classList.remove('fa-chevron-down');
-                    icon.classList.add('fa-chevron-up');
-                }
+document.addEventListener('DOMContentLoaded', function() {
+    // Global variables to store chart instances
+    let monthlyChart = null;
+    let incomeCategoryChart = null;
+    let outcomeCategoryChart = null;
+    
+    // Track current month to prevent duplicate fetches
+    let currentMonthKey = null;
+    
+    // Keep track of active state
+    let isDataLoading = false;
+    
+    // Bootstrap Modal instance
+    let editEntryModal = null;
+    
+    // Initialize the modal
+    initializeModal();
+    
+    // Remove collapsible behavior from category cards
+    document.querySelectorAll('[data-bs-target="#incomeCategoriesCollapse"], [data-bs-target="#outcomeCategoriesCollapse"]').forEach(header => {
+        header.removeAttribute('data-bs-toggle');
+        
+        // Remove clickable styling
+        header.classList.remove('card-header-clickable');
+        
+        // Remove pointer cursor
+        header.style.cursor = 'default';
+        
+        // Remove the chevron icon
+        const icon = header.querySelector('.fas');
+        if (icon) {
+            icon.remove();
+        }
+    });
+    
+    // Make category charts always visible
+    document.querySelectorAll('#incomeCategoriesCollapse, #outcomeCategoriesCollapse').forEach(collapse => {
+        collapse.classList.add('show');
+        collapse.classList.remove('collapse');
+    });
+    
+    // Toggle icon rotation for remaining collapsible cards
+    document.querySelectorAll('.card-header-clickable').forEach(header => {
+        header.addEventListener('click', function() {
+            const icon = this.querySelector('.fas');
+            if (icon) {
+                icon.classList.toggle('fa-chevron-down');
+                icon.classList.toggle('fa-chevron-up');
             }
         });
         
-        // Filter functionality for entries table
-        const filterButton = document.getElementById('filter-button');
-        if (filterButton) {
-            filterButton.addEventListener('click', function() {
-                const monthFilter = document.getElementById('month-filter').value;
-                const typeFilter = document.getElementById('type-filter').value;
+        // Initialize the icon states based on collapse state
+        const collapseId = header.getAttribute('data-bs-target');
+        const collapseEl = document.querySelector(collapseId);
+        if (collapseEl && collapseEl.classList.contains('show')) {
+            const icon = header.querySelector('.fas');
+            if (icon) {
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
+            }
+        }
+    });
+    
+    // Filter functionality for entries table
+    const filterButton = document.getElementById('filter-button');
+    if (filterButton) {
+        filterButton.addEventListener('click', function() {
+            const monthFilter = document.getElementById('month-filter').value;
+            const typeFilter = document.getElementById('type-filter').value;
+            
+            // If a specific month is selected, also update UI
+            if (monthFilter !== 'all' && monthFilter !== currentMonthKey) {
+                // Find and click the corresponding month row
+                const monthRow = document.querySelector(`.month-row[data-month-key="${monthFilter}"]`);
+                if (monthRow) {
+                    monthRow.click();
+                    return; // The click will handle filtering
+                }
+            }
+            
+            // Otherwise just filter the table
+            document.querySelectorAll('#entries-table tbody tr').forEach(row => {
+                const rowMonth = row.getAttribute('data-month');
+                const rowType = row.getAttribute('data-type');
                 
-                document.querySelectorAll('#entries-table tbody tr').forEach(row => {
-                    const rowMonth = row.getAttribute('data-month');
-                    const rowType = row.getAttribute('data-type');
-                    
-                    let showRow = true;
-                    
-                    if (monthFilter !== 'all' && rowMonth !== monthFilter) {
-                        showRow = false;
-                    }
-                    
-                    if (typeFilter !== 'all' && rowType !== typeFilter) {
-                        showRow = false;
-                    }
-                    
-                    row.style.display = showRow ? '' : 'none';
-                });
+                let showRow = true;
+                
+                if (monthFilter !== 'all' && rowMonth !== monthFilter) {
+                    showRow = false;
+                }
+                
+                if (typeFilter !== 'all' && rowType !== typeFilter) {
+                    showRow = false;
+                }
+                
+                row.style.display = showRow ? '' : 'none';
+            });
+        });
+    }
+    
+    // Initialize monthly chart
+    initMonthlyChart();
+    
+    // Initialize category charts
+    initCategoryCharts();
+    
+    // Month row click handler
+    document.querySelector('#monthly-stats-tbody').addEventListener('click', function(event) {
+        // Ensure we're clicking on a month row or its child
+        const row = event.target.closest('.month-row');
+        if (!row) return;
+        
+        const monthKey = row.getAttribute('data-month-key');
+        if (!monthKey) return;
+        
+        // Don't do anything if this month is already active
+        if (monthKey === currentMonthKey && !isDataLoading) return;
+        
+        // Add active class to this row and remove from others
+        document.querySelectorAll('.month-row').forEach(r => {
+            r.classList.remove('active');
+        });
+        row.classList.add('active');
+        
+        // Show loader
+        document.getElementById('loader').style.display = 'block';
+        
+        // Set loading state
+        isDataLoading = true;
+        
+        // Fetch data for the selected month
+        fetchMonthData(monthKey);
+    });
+    
+    // Edit button click handlers (using event delegation for newly added entries too)
+    document.addEventListener('click', function(event) {
+        const editButton = event.target.closest('.edit-entry-btn');
+        if (editButton) {
+            const entryId = editButton.getAttribute('data-entry-id');
+            openEditEntryModal(entryId);
+        }
+    });
+    
+    // Save edit button click handler
+    document.getElementById('saveEditButton').addEventListener('click', function() {
+        saveEditedEntry();
+    });
+    
+    /**
+     * Initialize the edit entry modal
+     */
+    function initializeModal() {
+        const modalEl = document.getElementById('editEntryModal');
+        if (modalEl) {
+            editEntryModal = new bootstrap.Modal(modalEl, {
+                backdrop: 'static',  // Prevent closing when clicking outside
+                keyboard: false      // Prevent closing with escape key
+            });
+            
+            // Add event handlers for form components
+            document.getElementById('edit-type-income').addEventListener('change', filterEditCategories);
+            document.getElementById('edit-type-outcome').addEventListener('change', filterEditCategories);
+            
+            // Add event listener for modal hide
+            modalEl.addEventListener('hidden.bs.modal', function() {
+                // Reset form values when modal is closed
+                document.getElementById('editEntryForm').reset();
             });
         }
+    }
+    
+    /**
+     * Filter categories based on selected type in edit modal
+     */
+    function filterEditCategories() {
+        const typeIncome = document.getElementById('edit-type-income');
+        const incomeCategories = document.getElementById('edit-income-categories');
+        const outcomeCategories = document.getElementById('edit-outcome-categories');
         
-        // Debug info to console
-        console.log("DOM loaded, checking for chart requirements");
+        if (typeIncome.checked) {
+            incomeCategories.style.display = 'block';
+            outcomeCategories.style.display = 'none';
+            
+            // Select first income category if none selected
+            let hasSelectedIncome = false;
+            incomeCategories.querySelectorAll('option').forEach(option => {
+                if (option.selected && !option.disabled) hasSelectedIncome = true;
+            });
+            
+            // If no income category selected, select the first one
+            if (!hasSelectedIncome) {
+                const firstIncomeOption = incomeCategories.querySelector('option:not([disabled])');
+                if (firstIncomeOption) firstIncomeOption.selected = true;
+            }
+        } else {
+            incomeCategories.style.display = 'none';
+            outcomeCategories.style.display = 'block';
+            
+            // Select first outcome category if none selected
+            let hasSelectedOutcome = false;
+            outcomeCategories.querySelectorAll('option').forEach(option => {
+                if (option.selected && !option.disabled) hasSelectedOutcome = true;
+            });
+            
+            // If no outcome category selected, select the first one
+            if (!hasSelectedOutcome) {
+                const firstOutcomeOption = outcomeCategories.querySelector('option:not([disabled])');
+                if (firstOutcomeOption) firstOutcomeOption.selected = true;
+            }
+        }
+    }
+    
+    /**
+     * Open the edit entry modal with the given entry ID
+     */
+    function openEditEntryModal(entryId) {
+        // Check if modal is already open to prevent multiple fetches
+        if (document.querySelector('.modal.show')) return;
         
+        // Show loader
+        document.getElementById('loader').style.display = 'block';
+        
+        // Fetch entry data
+        fetch(`/costincome/get_entry/${entryId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Fill form with entry data
+                    const entry = data.entry;
+                    document.getElementById('edit-entry-id').value = entry.id;
+                    document.getElementById('edit-entry-date').value = entry.date;
+                    document.getElementById('edit-amount').value = entry.amount;
+                    document.getElementById('edit-description').value = entry.description || '';
+                    
+                    // Set entry type
+                    if (entry.type === 'income') {
+                        document.getElementById('edit-type-income').checked = true;
+                    } else {
+                        document.getElementById('edit-type-outcome').checked = true;
+                    }
+                    
+                    // Filter categories based on type
+                    filterEditCategories();
+                    
+                    // Set category (delay slightly to ensure categories are filtered)
+                    setTimeout(() => {
+                        document.getElementById('edit-category').value = entry.category;
+                        
+                        // Show modal
+                        if (editEntryModal) {
+                            editEntryModal.show();
+                        }
+                    }, 100);
+                } else {
+                    console.error('Error fetching entry data:', data.error);
+                    
+                    // Show error message to user
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+                    alertDiv.innerHTML = `
+                        Fehler beim Laden des Eintrags: ${data.error || 'Unbekannter Fehler'}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+                    document.querySelector('.container').prepend(alertDiv);
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                
+                // Show error message to user
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+                alertDiv.innerHTML = `
+                    Fehler beim Laden des Eintrags: ${error.message || 'Netzwerkfehler'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                document.querySelector('.container').prepend(alertDiv);
+            })
+            .finally(() => {
+                // Hide loader
+                document.getElementById('loader').style.display = 'none';
+            });
+    }
+    
+    /**
+     * Save the edited entry
+     */
+    function saveEditedEntry() {
+        // Get form values
+        const entryId = document.getElementById('edit-entry-id').value;
+        
+        // Ensure we have a radio button checked
+        const typeRadio = document.querySelector('input[name="edit-type"]:checked');
+        if (!typeRadio) {
+            alert('Bitte wählen Sie einen Typ (Einnahme oder Ausgabe)');
+            return;
+        }
+        
+        const entryType = typeRadio.value;
+        const entryDate = document.getElementById('edit-entry-date').value;
+        const amount = document.getElementById('edit-amount').value;
+        const category = document.getElementById('edit-category').value;
+        const description = document.getElementById('edit-description').value || '';
+        
+        // Validate form
+        if (!entryDate) {
+            alert('Bitte geben Sie ein Datum ein');
+            return;
+        }
+        
+        if (!amount || parseFloat(amount) <= 0) {
+            alert('Bitte geben Sie einen gültigen Betrag ein (größer als 0)');
+            return;
+        }
+        
+        if (!category) {
+            alert('Bitte wählen Sie eine Kategorie');
+            return;
+        }
+        
+        // Prepare data
+        const data = {
+            type: entryType,
+            date: entryDate,
+            amount: parseFloat(amount),
+            category: category,
+            description: description
+        };
+        
+        // Show loader
+        document.getElementById('loader').style.display = 'block';
+        
+        // Send update request
+        fetch(`/costincome/update_entry/${entryId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Hide modal
+                if (editEntryModal) {
+                    editEntryModal.hide();
+                }
+                
+                // If we have a month key, update the UI with the new data
+                if (data.month_key) {
+                    // Check if this is the current month being viewed
+                    if (data.month_key === currentMonthKey) {
+                        fetchMonthData(data.month_key);
+                    } else {
+                        // Flash success message
+                        let flashDiv = document.createElement('div');
+                        flashDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+                        flashDiv.innerHTML = `
+                            Eintrag erfolgreich aktualisiert. 
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        `;
+                        document.querySelector('.container').prepend(flashDiv);
+                        
+                        // Automatically dismiss after 3 seconds
+                        setTimeout(() => {
+                            const bsAlert = new bootstrap.Alert(flashDiv);
+                            bsAlert.close();
+                        }, 3000);
+                    }
+                } else {
+                    // Fallback: reload the page
+                    window.location.reload();
+                }
+            } else {
+                console.error('Error updating entry:', data.error);
+                alert('Fehler beim Aktualisieren des Eintrags: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            alert('Fehler beim Aktualisieren des Eintrags: ' + (error.message || 'Netzwerkfehler'));
+        })
+        .finally(() => {
+            // Hide loader
+            document.getElementById('loader').style.display = 'none';
+        });
+    }
+    
+    /**
+     * Fetch data for a specific month
+     */
+    function fetchMonthData(monthKey) {
+        // Set this as current month key
+        currentMonthKey = monthKey;
+        
+        // Log that we're starting to fetch data
+        console.log(`Fetching data for month: ${monthKey}`);
+        
+        fetch(`/costincome/get_month_data/${monthKey}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Log data received to help with debugging
+                    console.log(`Received month data:`, {
+                        month: data.month_name,
+                        income_total: data.income_total,
+                        outcome_total: data.outcome_total,
+                        balance: data.balance,
+                        income_categories: Object.keys(data.income_by_category || {}).length,
+                        outcome_categories: Object.keys(data.outcome_by_category || {}).length,
+                        entries: (data.entries || []).length
+                    });
+                    
+                    updateUIWithMonthData(data, monthKey);
+                    
+                    // Expand the entries list if it's not already expanded
+                    const entriesCollapse = document.getElementById('entriesListCollapse');
+                    if (entriesCollapse && !entriesCollapse.classList.contains('show')) {
+                        const bsCollapse = bootstrap.Collapse.getInstance(entriesCollapse);
+                        if (bsCollapse) {
+                            bsCollapse.show();
+                        } else {
+                            new bootstrap.Collapse(entriesCollapse).show();
+                        }
+                        
+                        // Update icon state
+                        const icon = document.querySelector('[data-bs-target="#entriesListCollapse"] .fas');
+                        if (icon) {
+                            icon.classList.remove('fa-chevron-down');
+                            icon.classList.add('fa-chevron-up');
+                        }
+                    }
+                } else {
+                    console.error('Error fetching month data:', data.error);
+                    // Show error message to user
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+                    alertDiv.innerHTML = `
+                        Fehler beim Laden der Daten: ${data.error || 'Unbekannter Fehler'}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+                    document.querySelector('.container').prepend(alertDiv);
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                console.log('Error details:', error.stack);
+                
+                // Show error message to user
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+                alertDiv.innerHTML = `
+                    Fehler beim Laden der Daten: ${error.message || 'Netzwerkfehler'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                document.querySelector('.container').prepend(alertDiv);
+            })
+            .finally(() => {
+                // Hide loader
+                document.getElementById('loader').style.display = 'none';
+                
+                // Reset loading state
+                isDataLoading = false;
+            });
+    }
+    
+    /**
+     * Update the UI with the fetched month data
+     */
+    function updateUIWithMonthData(data, monthKey) {
+        try {
+            // Update summary cards
+            document.querySelectorAll('#current-month-name, #current-month-name-2, #current-month-name-3').forEach(el => {
+                el.textContent = data.month_name;
+            });
+            
+            document.getElementById('income-total').textContent = data.income_total.toFixed(2) + ' €';
+            document.getElementById('outcome-total').textContent = data.outcome_total.toFixed(2) + ' €';
+            
+            const balanceAmount = document.getElementById('balance-amount');
+            balanceAmount.textContent = data.balance.toFixed(2) + ' €';
+            
+            if (data.balance >= 0) {
+                balanceAmount.classList.remove('balance-negative');
+                balanceAmount.classList.add('balance-positive');
+            } else {
+                balanceAmount.classList.remove('balance-positive');
+                balanceAmount.classList.add('balance-negative');
+            }
+            
+            // Update entries table
+            updateEntriesTable(data.entries);
+            
+            // Update category charts - do this with a slight delay to ensure DOM is ready
+            setTimeout(() => {
+                // Explicitly update each chart separately
+                if (data.income_by_category) {
+                    updateIncomeCategoryChart(data.income_by_category);
+                }
+                
+                if (data.outcome_by_category) {
+                    updateOutcomeCategoryChart(data.outcome_by_category);
+                }
+            }, 150);
+            
+            // Also update the month filter dropdown to match the selected month
+            const monthFilter = document.getElementById('month-filter');
+            if (monthFilter && monthKey) {
+                Array.from(monthFilter.options).forEach(option => {
+                    if (option.value === monthKey) {
+                        option.selected = true;
+                    }
+                });
+            }
+            
+            // Log successful update for debugging
+            console.log(`UI updated successfully for month: ${data.month_name}`);
+        } catch (error) {
+            console.error("Error updating UI:", error, error.stack);
+        }
+    }
+    
+    /**
+     * Update the entries table with new data
+     */
+    function updateEntriesTable(entries) {
+        const tableBody = document.getElementById('entries-table-body');
+        if (!tableBody) return;
+        
+        // Clear existing entries
+        tableBody.innerHTML = '';
+        
+        if (!entries || entries.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = '<td colspan="6" class="text-center text-muted">Keine Einträge für diesen Monat</td>';
+            tableBody.appendChild(row);
+            return;
+        }
+        
+        // Add new entries
+        entries.forEach(entry => {
+            const row = document.createElement('tr');
+            row.setAttribute('data-month', entry.date.substring(0, 7));
+            row.setAttribute('data-type', entry.type);
+            row.setAttribute('data-id', entry.id);
+            
+            row.innerHTML = `
+                <td>${entry.date}</td>
+                <td>
+                    ${entry.type === 'income' 
+                        ? '<span class="badge bg-success">Einnahme</span>'
+                        : '<span class="badge bg-danger">Ausgabe</span>'}
+                </td>
+                <td>${entry.category}</td>
+                <td>${entry.description || ''}</td>
+                <td class="text-end ${entry.type === 'income' ? 'income' : 'outcome'}">
+                    ${entry.amount.toFixed(2)} €
+                </td>
+                <td class="text-end">
+                    <button type="button" class="btn btn-sm btn-outline-primary edit-entry-btn" data-entry-id="${entry.id}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <form method="POST" action="/costincome/delete/${entry.id}" 
+                          class="d-inline" onsubmit="return confirm('Sind Sie sicher?');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger action-btn">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </form>
+                </td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+    }
+    
+    /**
+     * Initialize the monthly chart
+     */
+    function initMonthlyChart() {
         try {
             // Check if Chart.js is loaded
             if (typeof Chart === 'undefined') {
@@ -360,74 +1038,33 @@
                 return;
             }
             
-            // Only proceed if we have data
-            {% if monthly_stats %}
-            console.log("Monthly stats available, preparing chart data");
+            // Only proceed if we have data and the canvas element exists
+            const chartCanvas = document.getElementById('monthlyChart');
+            if (!chartCanvas) {
+                return;
+            }
             
-            // Get the chart data from monthly_stats directly if monthly_stats_chrono is not available
+            {% if monthly_stats_chrono %}
+            // Get chart data
             const chartLabels = [];
             const chartIncomes = [];
             const chartOutcomes = [];
             const chartBalances = [];
             
-            // Use chronological order if available, otherwise use monthly_stats
-            {% if monthly_stats_chrono is defined %}
-                console.log("Using monthly_stats_chrono for chart data");
-                // Use data passed from the backend in chronological order
-                {% for stat in monthly_stats_chrono %}
-                    chartLabels.push("{{ stat.month }}");
-                    chartIncomes.push({{ stat.income|float }});
-                    chartOutcomes.push({{ stat.outcome|float }});
-                    chartBalances.push({{ stat.balance|float }});
-                {% endfor %}
-            {% else %}
-                console.log("monthly_stats_chrono not available, using sorted monthly_stats");
-                // Create a sorted copy of monthly_stats (oldest first)
-                const sortedStats = [];
-                {% for stat in monthly_stats %}
-                    sortedStats.push({
-                        month: "{{ stat.month }}",
-                        monthKey: "{{ stat.month_key if stat.month_key is defined else '' }}",
-                        income: {{ stat.income|float }},
-                        outcome: {{ stat.outcome|float }},
-                        balance: {{ stat.balance|float }}
-                    });
-                {% endfor %}
-                
-                // Sort by month_key if available, otherwise by month string
-                sortedStats.sort(function(a, b) {
-                    if (a.monthKey && b.monthKey) {
-                        return a.monthKey.localeCompare(b.monthKey);
-                    }
-                    return a.month.localeCompare(b.month);
-                });
-                
-                // Add sorted data to chart arrays
-                for (const stat of sortedStats) {
-                    chartLabels.push(stat.month);
-                    chartIncomes.push(stat.income);
-                    chartOutcomes.push(stat.outcome);
-                    chartBalances.push(stat.balance);
-                }
-            {% endif %}
+            {% for stat in monthly_stats_chrono %}
+            chartLabels.push("{{ stat.month }}");
+            chartIncomes.push({{ stat.income|float }});
+            chartOutcomes.push({{ stat.outcome|float }});
+            chartBalances.push({{ stat.balance|float }});
+            {% endfor %}
             
-            console.log("Chart data prepared:", {
-                labels: chartLabels,
-                incomes: chartIncomes,
-                outcomes: chartOutcomes,
-                balances: chartBalances
-            });
-            
-            // Make sure the canvas exists
-            const chartCanvas = document.getElementById('monthlyChart');
-            if (!chartCanvas) {
-                console.error("Chart canvas element 'monthlyChart' not found in the DOM");
-                return;
+            // Create chart
+            const ctx = chartCanvas.getContext('2d');
+            if (monthlyChart) {
+                monthlyChart.destroy();
             }
             
-            console.log("Creating chart with Canvas context");
-            const ctx = chartCanvas.getContext('2d');
-            const monthlyChart = new Chart(ctx, {
+            monthlyChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: chartLabels,
@@ -493,137 +1130,403 @@
                     }
                 }
             });
-            console.log("Monthly chart created successfully");
-            {% else %}
-            console.log("No monthly_stats data available for chart");
             {% endif %}
-            
-            // Create category charts if data is available
-            {% if income_by_category %}
-            const incomeCategoryCanvas = document.getElementById('incomeCategoryChart');
-            if (incomeCategoryCanvas) {
-                // Consolidate categories with the same name
-                const consolidatedCategories = {};
-                
-                {% for category, amount in income_by_category.items() %}
-                // If category already exists, add to its amount, otherwise create new entry
-                if (consolidatedCategories["{{ category }}"]) {
-                    consolidatedCategories["{{ category }}"] += {{ amount|float }};
-                } else {
-                    consolidatedCategories["{{ category }}"] = {{ amount|float }};
-                }
-                {% endfor %}
-                
-                // Now create arrays from the consolidated data
-                const categoryLabels = Object.keys(consolidatedCategories);
-                const categoryValues = Object.values(consolidatedCategories);
-                
-                new Chart(incomeCategoryCanvas.getContext('2d'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: categoryLabels,
-                        datasets: [{
-                            data: categoryValues,
-                            backgroundColor: [
-                                'rgba(25, 135, 84, 0.8)',
-                                'rgba(32, 156, 105, 0.8)',
-                                'rgba(40, 178, 125, 0.8)',
-                                'rgba(47, 199, 146, 0.8)',
-                                'rgba(55, 221, 166, 0.8)',
-                                'rgba(62, 242, 187, 0.8)',
-                                'rgba(104, 244, 198, 0.8)',
-                                'rgba(145, 247, 208, 0.8)'
-                            ],
-                            borderColor: 'rgba(255, 255, 255, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        const label = context.label || '';
-                                        const value = context.formattedValue;
-                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                        const percentage = Math.round((context.raw / total) * 100);
-                                        return `${label}: ${value} € (${percentage}%)`;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-                console.log("Income category chart created successfully");
-            }
-            {% endif %}
-            
-            {% if outcome_by_category %}
-            const outcomeCategoryCanvas = document.getElementById('outcomeCategoryChart');
-            if (outcomeCategoryCanvas) {
-                // Consolidate categories with the same name
-                const consolidatedCategories = {};
-                
-                {% for category, amount in outcome_by_category.items() %}
-                // If category already exists, add to its amount, otherwise create new entry
-                if (consolidatedCategories["{{ category }}"]) {
-                    consolidatedCategories["{{ category }}"] += {{ amount|float }};
-                } else {
-                    consolidatedCategories["{{ category }}"] = {{ amount|float }};
-                }
-                {% endfor %}
-                
-                // Now create arrays from the consolidated data
-                const categoryLabels = Object.keys(consolidatedCategories);
-                const categoryValues = Object.values(consolidatedCategories);
-                
-                new Chart(outcomeCategoryCanvas.getContext('2d'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: categoryLabels,
-                        datasets: [{
-                            data: categoryValues,
-                            backgroundColor: [
-                                'rgba(220, 53, 69, 0.8)',
-                                'rgba(235, 78, 93, 0.8)',
-                                'rgba(239, 103, 116, 0.8)',
-                                'rgba(242, 128, 139, 0.8)',
-                                'rgba(246, 153, 162, 0.8)',
-                                'rgba(249, 178, 185, 0.8)',
-                                'rgba(252, 203, 207, 0.8)',
-                                'rgba(255, 228, 230, 0.8)'
-                            ],
-                            borderColor: 'rgba(255, 255, 255, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        const label = context.label || '';
-                                        const value = context.formattedValue;
-                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                        const percentage = Math.round((context.raw / total) * 100);
-                                        return `${label}: ${value} € (${percentage}%)`;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-                console.log("Outcome category chart created successfully");
-            }
-            {% endif %}
-            
         } catch (error) {
-            console.error("Error creating chart:", error);
+            console.error("Error initializing monthly chart:", error);
+        }
+    }
+    
+    /**
+     * Initialize category charts
+     */
+    function initCategoryCharts() {
+        initIncomeCategoryChart();
+        initOutcomeCategoryChart();
+    }
+    
+    /**
+     * Initialize income category chart
+     */
+    function initIncomeCategoryChart() {
+        const incomeCategoryCanvas = document.getElementById('incomeCategoryChart');
+        if (!incomeCategoryCanvas) return;
+        
+        {% if income_by_category %}
+        // Consolidate categories with the same name
+        const categoryLabels = [];
+        const categoryValues = [];
+        
+        {% for category, amount in income_by_category.items() %}
+        categoryLabels.push("{{ category }}");
+        categoryValues.push({{ amount|float }});
+        {% endfor %}
+        
+        // Destroy existing chart if it exists
+        if (incomeCategoryChart) {
+            incomeCategoryChart.destroy();
+        }
+        
+        incomeCategoryChart = new Chart(incomeCategoryCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryValues,
+                    backgroundColor: [
+                        'rgba(25, 135, 84, 0.8)',
+                        'rgba(32, 156, 105, 0.8)',
+                        'rgba(40, 178, 125, 0.8)',
+                        'rgba(47, 199, 146, 0.8)',
+                        'rgba(55, 221, 166, 0.8)',
+                        'rgba(62, 242, 187, 0.8)',
+                        'rgba(104, 244, 198, 0.8)',
+                        'rgba(145, 247, 208, 0.8)'
+                    ],
+                    borderColor: 'rgba(255, 255, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.formattedValue;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return `${label}: ${value} € (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        {% endif %}
+    }
+    
+    /**
+     * Initialize outcome category chart
+     */
+    function initOutcomeCategoryChart() {
+        const outcomeCategoryCanvas = document.getElementById('outcomeCategoryChart');
+        if (!outcomeCategoryCanvas) return;
+        
+        {% if outcome_by_category %}
+        // Consolidate categories with the same name
+        const categoryLabels = [];
+        const categoryValues = [];
+        
+        {% for category, amount in outcome_by_category.items() %}
+        categoryLabels.push("{{ category }}");
+        categoryValues.push({{ amount|float }});
+        {% endfor %}
+        
+        // Destroy existing chart if it exists
+        if (outcomeCategoryChart) {
+            outcomeCategoryChart.destroy();
+        }
+        
+        outcomeCategoryChart = new Chart(outcomeCategoryCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryValues,
+                    backgroundColor: [
+                        'rgba(220, 53, 69, 0.8)',
+                        'rgba(232, 67, 84, 0.8)',
+                        'rgba(237, 85, 101, 0.8)',
+                        'rgba(242, 104, 119, 0.8)',
+                        'rgba(244, 123, 138, 0.8)',
+                        'rgba(246, 153, 162, 0.8)',
+                        'rgba(249, 181, 189, 0.8)',
+                        'rgba(252, 217, 222, 0.8)'
+                    ],
+                    borderColor: 'rgba(255, 255, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.formattedValue;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return `${label}: ${value} € (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        {% endif %}
+    }
+    
+    /**
+     * Update income category chart with new data
+     */
+    function updateIncomeCategoryChart(incomeCategories) {
+        if (!incomeCategories) return;
+        
+        // Get container elements
+        const chartContainer = document.getElementById('income-categories-container');
+        if (!chartContainer) return;
+        
+        // If no categories, show no data message
+        if (Object.keys(incomeCategories).length === 0) {
+            chartContainer.innerHTML = '<p class="text-center text-muted my-3">Keine Einnahmen Kategorien vorhanden</p>';
+            return;
+        }
+        
+        // Make sure the container has the chart and badges div structure
+        if (!document.getElementById('incomeCategoryChart')) {
+            chartContainer.innerHTML = `
+                <div class="chart-container">
+                    <canvas id="incomeCategoryChart"></canvas>
+                </div>
+                <div class="mt-3" id="income-category-badges"></div>
+            `;
+        }
+        
+        // Get updated references
+        const chartCanvas = document.getElementById('incomeCategoryChart');
+        const badgesContainer = document.getElementById('income-category-badges');
+        
+        if (!chartCanvas || !badgesContainer) {
+            console.error("Could not find chart canvas or badges container");
+            return;
+        }
+        
+        // Prepare chart data
+        const categoryLabels = [];
+        const categoryValues = [];
+        
+        for (const [category, amount] of Object.entries(incomeCategories)) {
+            categoryLabels.push(category);
+            categoryValues.push(parseFloat(amount)); // Ensure we have numbers, not strings
+        }
+        
+        // Always destroy and recreate the chart to avoid update issues
+        if (incomeCategoryChart) {
+            incomeCategoryChart.destroy();
+            incomeCategoryChart = null;
+        }
+        
+        // Create new chart instance
+        incomeCategoryChart = new Chart(chartCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryValues,
+                    backgroundColor: [
+                        'rgba(25, 135, 84, 0.8)',
+                        'rgba(32, 156, 105, 0.8)',
+                        'rgba(40, 178, 125, 0.8)',
+                        'rgba(47, 199, 146, 0.8)',
+                        'rgba(55, 221, 166, 0.8)',
+                        'rgba(62, 242, 187, 0.8)',
+                        'rgba(104, 244, 198, 0.8)',
+                        'rgba(145, 247, 208, 0.8)'
+                    ],
+                    borderColor: 'rgba(255, 255, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.formattedValue;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return `${label}: ${value} € (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Update badges
+        badgesContainer.innerHTML = '';
+        
+        for (const [category, amount] of Object.entries(incomeCategories)) {
+            const badge = document.createElement('span');
+            badge.className = 'badge rounded-pill category-badge category-income';
+            badge.textContent = `${category}: ${parseFloat(amount).toFixed(2)} €`;
+            badgesContainer.appendChild(badge);
+        }
+    }
+    
+    /**
+     * Update outcome category chart with new data
+     */
+    function updateOutcomeCategoryChart(outcomeCategories) {
+        if (!outcomeCategories) return;
+        
+        // Get container elements
+        const chartContainer = document.getElementById('outcome-categories-container');
+        if (!chartContainer) return;
+        
+        // If no categories, show no data message
+        if (Object.keys(outcomeCategories).length === 0) {
+            chartContainer.innerHTML = '<p class="text-center text-muted my-3">Keine Ausgaben Kategorien vorhanden</p>';
+            return;
+        }
+        
+        // Make sure the container has the chart and badges div structure
+        if (!document.getElementById('outcomeCategoryChart')) {
+            chartContainer.innerHTML = `
+                <div class="chart-container">
+                    <canvas id="outcomeCategoryChart"></canvas>
+                </div>
+                <div class="mt-3" id="outcome-category-badges"></div>
+            `;
+        }
+        
+        // Get updated references
+        const chartCanvas = document.getElementById('outcomeCategoryChart');
+        const badgesContainer = document.getElementById('outcome-category-badges');
+        
+        if (!chartCanvas || !badgesContainer) {
+            console.error("Could not find outcome chart canvas or badges container");
+            return;
+        }
+        
+        // Prepare chart data
+        const categoryLabels = [];
+        const categoryValues = [];
+        
+        for (const [category, amount] of Object.entries(outcomeCategories)) {
+            categoryLabels.push(category);
+            categoryValues.push(parseFloat(amount)); // Ensure we have numbers, not strings
+        }
+        
+        // Always destroy and recreate the chart to avoid update issues
+        if (outcomeCategoryChart) {
+            outcomeCategoryChart.destroy();
+            outcomeCategoryChart = null;
+        }
+        
+        // Create new chart instance
+        outcomeCategoryChart = new Chart(chartCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryValues,
+                    backgroundColor: [
+                        'rgba(220, 53, 69, 0.8)',
+                        'rgba(232, 67, 84, 0.8)',
+                        'rgba(237, 85, 101, 0.8)',
+                        'rgba(242, 104, 119, 0.8)',
+                        'rgba(244, 123, 138, 0.8)',
+                        'rgba(246, 153, 162, 0.8)',
+                        'rgba(249, 181, 189, 0.8)',
+                        'rgba(252, 217, 222, 0.8)'
+                    ],
+                    borderColor: 'rgba(255, 255, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.formattedValue;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return `${label}: ${value} € (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Update badges
+        badgesContainer.innerHTML = '';
+        
+        for (const [category, amount] of Object.entries(outcomeCategories)) {
+            const badge = document.createElement('span');
+            badge.className = 'badge rounded-pill category-badge category-outcome';
+            badge.textContent = `${category}: ${parseFloat(amount).toFixed(2)} €`;
+            badgesContainer.appendChild(badge);
+        }
+    }
+    
+    // Initialize by highlighting current month in monthly stats table
+    function highlightCurrentMonth() {
+        if (!currentMonthKey) {
+            // Get current month in YYYY-MM format
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const currentMonthStr = `${year}-${month}`;
+            
+            // Find the row for current month
+            const currentMonthRow = document.querySelector(`.month-row[data-month-key="${currentMonthStr}"]`);
+            if (currentMonthRow) {
+                currentMonthRow.classList.add('active');
+                currentMonthKey = currentMonthStr;
+            }
+        }
+    }
+    
+    // Call highlight function on page load
+    highlightCurrentMonth();
+    
+    // Key press events for the edit modal
+    document.getElementById('editEntryForm').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('saveEditButton').click();
         }
     });
+    
+    // Export functionality (if needed in the future)
+    function exportData(format) {
+        // Show loader
+        document.getElementById('loader').style.display = 'block';
+        
+        // Get current filter settings
+        const monthFilter = document.getElementById('month-filter').value;
+        const typeFilter = document.getElementById('type-filter').value;
+        
+        // Prepare export URL with filters
+        let exportUrl = `/costincome/export?format=${format}`;
+        if (monthFilter !== 'all') {
+            exportUrl += `&month=${monthFilter}`;
+        }
+        if (typeFilter !== 'all') {
+            exportUrl += `&type=${typeFilter}`;
+        }
+        
+        // Redirect to export URL
+        window.location.href = exportUrl;
+        
+        // Hide loader after a short delay
+        setTimeout(() => {
+            document.getElementById('loader').style.display = 'none';
+        }, 1000);
+    }
+});
 </script>
 {% endblock %}

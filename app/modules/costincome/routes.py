@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, flash
+from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app.modules.costincome import bp
 from app import db
@@ -6,6 +6,7 @@ from app.models import CostIncomeEntry
 from datetime import datetime
 import traceback
 import pandas as pd
+import json
 
 @bp.route('/')
 @login_required
@@ -153,6 +154,80 @@ def index():
                               monthly_stats=[],
                               current_month_name=datetime.now().strftime('%B %Y'))
 
+@bp.route('/get_month_data/<month_key>', methods=['GET'])
+@login_required
+def get_month_data(month_key):
+    try:
+        # Get current user's entries from the database
+        entries = CostIncomeEntry.query.filter_by(user_id=current_user.id).all()
+        
+        # Parse the month_key to get month and year
+        date_obj = datetime.strptime(month_key, '%Y-%m')
+        selected_month = date_obj.month
+        selected_year = date_obj.year
+        month_name = date_obj.strftime('%B %Y')
+        
+        # Convert entries to dictionary format
+        entries_list = [
+            {
+                'id': entry.id,
+                'date': entry.date.strftime('%Y-%m-%d'),
+                'type': entry.type,
+                'amount': float(entry.amount),  # Ensure amount is float for JSON serialization
+                'category': entry.category,
+                'description': entry.description or '',
+                'month': entry.date.month,
+                'year': entry.date.year,
+                'is_selected_month': (entry.date.month == selected_month and entry.date.year == selected_year)
+            } for entry in entries
+        ]
+        
+        # Calculate summary statistics for the selected month
+        income_total = sum(entry.amount for entry in entries 
+                       if entry.type == 'income' 
+                       and entry.date.month == selected_month 
+                       and entry.date.year == selected_year)
+        
+        outcome_total = sum(entry.amount for entry in entries 
+                        if entry.type == 'outcome' 
+                        and entry.date.month == selected_month 
+                        and entry.date.year == selected_year)
+        
+        balance = income_total - outcome_total
+        
+        # Group entries by category for the selected month only
+        income_by_category = {}
+        outcome_by_category = {}
+        
+        for entry in entries_list:
+            if entry['month'] == selected_month and entry['year'] == selected_year:
+                if entry['type'] == 'income':
+                    if entry['category'] not in income_by_category:
+                        income_by_category[entry['category']] = 0
+                    income_by_category[entry['category']] += entry['amount']
+                else:  # outcome
+                    if entry['category'] not in outcome_by_category:
+                        outcome_by_category[entry['category']] = 0
+                    outcome_by_category[entry['category']] += entry['amount']
+        
+        # Prepare the response data
+        response_data = {
+            'success': True,
+            'month_name': month_name,
+            'income_total': round(income_total, 2),
+            'outcome_total': round(outcome_total, 2),
+            'balance': round(balance, 2),
+            'income_by_category': {k: round(v, 2) for k, v in income_by_category.items()},
+            'outcome_by_category': {k: round(v, 2) for k, v in outcome_by_category.items()},
+            'entries': [entry for entry in entries_list if entry['month'] == selected_month and entry['year'] == selected_year]
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
 @bp.route('/add', methods=['GET', 'POST'])
 @login_required
 def add():
@@ -208,6 +283,140 @@ def add():
         return redirect(url_for('costincome.index'))
     
     return render_template('costincome/add.html')
+
+@bp.route('/edit/<int:entry_id>', methods=['GET', 'POST'])
+@login_required
+def edit(entry_id):
+    # Get the entry from the database
+    entry = CostIncomeEntry.query.filter_by(id=entry_id, user_id=current_user.id).first_or_404()
+    
+    if request.method == 'POST':
+        entry_type = request.form.get('type')
+        amount = request.form.get('amount')
+        category = request.form.get('category')
+        description = request.form.get('description', '')
+        entry_date = request.form.get('entry_date')
+        
+        # Validate input
+        if not entry_type or entry_type not in ['income', 'outcome']:
+            flash('Ungültiger Eintrags-Typ', 'danger')
+            return redirect(url_for('costincome.edit', entry_id=entry_id))
+        
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                raise ValueError("Amount must be positive")
+        except:
+            flash('Betrag muss eine positive Zahl sein', 'danger')
+            return redirect(url_for('costincome.edit', entry_id=entry_id))
+            
+        if not category:
+            flash('Kategorie ist erforderlich', 'danger')
+            return redirect(url_for('costincome.edit', entry_id=entry_id))
+        
+        if not entry_date:
+            flash('Datum ist erforderlich', 'danger')
+            return redirect(url_for('costincome.edit', entry_id=entry_id))
+        
+        try:
+            # Validate and convert the date format
+            date_obj = datetime.strptime(entry_date, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Ungültiges Datumsformat', 'danger')
+            return redirect(url_for('costincome.edit', entry_id=entry_id))
+        
+        # Update the entry
+        entry.type = entry_type
+        entry.amount = amount
+        entry.category = category
+        entry.description = description
+        entry.date = date_obj
+        
+        db.session.commit()
+        
+        flash(f'Eintrag erfolgreich aktualisiert', 'success')
+        return redirect(url_for('costincome.index'))
+    
+    # For GET request, render the edit form with the current entry data
+    return render_template('costincome/edit.html', entry=entry)
+
+@bp.route('/get_entry/<int:entry_id>', methods=['GET'])
+@login_required
+def get_entry(entry_id):
+    try:
+        # Get the entry from the database
+        entry = CostIncomeEntry.query.filter_by(id=entry_id, user_id=current_user.id).first_or_404()
+        
+        # Convert entry to dictionary
+        entry_data = {
+            'id': entry.id,
+            'date': entry.date.strftime('%Y-%m-%d'),
+            'type': entry.type,
+            'amount': float(entry.amount),
+            'category': entry.category,
+            'description': entry.description or ''
+        }
+        
+        return jsonify({'success': True, 'entry': entry_data})
+    
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+@bp.route('/update_entry/<int:entry_id>', methods=['POST'])
+@login_required
+def update_entry(entry_id):
+    try:
+        # Get the entry from the database
+        entry = CostIncomeEntry.query.filter_by(id=entry_id, user_id=current_user.id).first_or_404()
+        
+        # Get the data from the request
+        data = request.json
+        
+        # Validate input
+        if not data.get('type') or data.get('type') not in ['income', 'outcome']:
+            return jsonify({'success': False, 'error': 'Ungültiger Eintrags-Typ'})
+        
+        try:
+            amount = float(data.get('amount', 0))
+            if amount <= 0:
+                raise ValueError("Amount must be positive")
+        except:
+            return jsonify({'success': False, 'error': 'Betrag muss eine positive Zahl sein'})
+            
+        if not data.get('category'):
+            return jsonify({'success': False, 'error': 'Kategorie ist erforderlich'})
+        
+        if not data.get('date'):
+            return jsonify({'success': False, 'error': 'Datum ist erforderlich'})
+        
+        try:
+            # Validate and convert the date format
+            date_obj = datetime.strptime(data.get('date'), '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Ungültiges Datumsformat'})
+        
+        # Update the entry
+        entry.type = data.get('type')
+        entry.amount = amount
+        entry.category = data.get('category')
+        entry.description = data.get('description', '')
+        entry.date = date_obj
+        
+        db.session.commit()
+        
+        # Get month key for the updated entry
+        month_key = entry.date.strftime('%Y-%m')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Eintrag erfolgreich aktualisiert',
+            'month_key': month_key
+        })
+    
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
 
 @bp.route('/delete/<int:entry_id>', methods=['POST'])
 @login_required
