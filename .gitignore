@@ -4,6 +4,9 @@ app/data/*
 # Instance directory - contains local database
 /instance/
 
+
+/gab-lab.at/
+
 # Python bytecode files
 __pycache__/
 *.py[cod]
