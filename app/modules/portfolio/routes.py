@@ -65,7 +65,7 @@ def fetch_price_safely(ticker_symbol):
         return cached_data.get('last_close', 0), cached_data
         
     # If we have to fetch, introduce a random delay to avoid rate limiting
-    delay = random.uniform(0.5, 2.0)
+    delay = 0.1
     time.sleep(delay)
     
     try:
