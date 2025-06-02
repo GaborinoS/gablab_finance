@@ -453,7 +453,7 @@ def add_asset():
             if ticker and not is_cache_fresh(ticker):
                 try:
                     # Introduce a random delay to avoid rate limiting
-                    time.sleep(random.uniform(0.5, 2.0))
+                    time.sleep(0.2)
                     
                     ticker_obj = yf.Ticker(ticker)
                     # Fetch complete historical data instead of just 1 day
@@ -534,7 +534,7 @@ def refresh():
                 os.remove(cache_file)
                 
             # Add a delay to avoid rate limiting
-            time.sleep(random.uniform(1.0, 3.0))
+            time.sleep(0.3)
                 
             # Fetch fresh data
             current_price, _ = fetch_price_safely(ticker)
@@ -651,7 +651,7 @@ def edit_asset(asset_class, index):
                     if not is_cache_fresh(ticker):
                         try:
                             # Introduce a random delay to avoid rate limiting
-                            time.sleep(random.uniform(0.5, 2.0))
+                            time.sleep(0.3)
                             
                             ticker_obj = yf.Ticker(ticker)
                             # Fetch complete historical data instead of just 1 day

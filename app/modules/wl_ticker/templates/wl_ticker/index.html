@@ -1,0 +1,838 @@
+<!-- app/modules/wl_ticker/templates/wl_ticker/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Gab-Lab Finance - WL Ticker{% endblock %}
+
+{% block extra_css %}
+<style>
+    .station-card {
+        transition: all 0.3s ease;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .station-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .departure-item {
+        padding: 0.4rem 0.5rem;
+        border-bottom: 1px solid #f8f9fa;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.9rem;
+    }
+    
+    .departure-item:last-child {
+        border-bottom: none;
+    }
+    
+    .direction-column {
+        flex: 1;
+        padding: 0;
+    }
+    
+    .direction-header {
+        background-color: #f8f9fa;
+        padding: 0.5rem;
+        font-weight: bold;
+        font-size: 0.85rem;
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .line-direction-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.75rem;
+        padding: 0.5rem;
+    }
+    
+    .line-direction-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        min-height: 120px;
+    }
+    
+    .line-direction-header {
+        background: #e9ecef;
+        padding: 0.5rem;
+        text-align: center;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .line-badge-large {
+        font-weight: bold;
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.4rem;
+        font-size: 1rem;
+        min-width: 50px;
+        text-align: center;
+        display: inline-block;
+        margin-bottom: 0.25rem;
+    }
+    
+    .direction-text {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #495057;
+        margin-top: 0.25rem;
+    }
+    
+    .departures-list {
+        padding: 0.5rem;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    
+    .departure-time-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.25rem 0;
+        border-bottom: 1px solid #f1f3f4;
+        font-size: 0.9rem;
+    }
+    
+    .departure-time-item:last-child {
+        border-bottom: none;
+    }
+    
+    .platform-info {
+        color: #6c757d;
+        font-size: 0.75rem;
+        margin-left: 0.5rem;
+    }
+    
+    .direction-divider {
+        width: 1px;
+        background-color: #dee2e6;
+        margin: 0.5rem 0;
+    }
+    
+    .no-departures-direction {
+        text-align: center;
+        color: #6c757d;
+        padding: 1rem 0.5rem;
+        font-style: italic;
+        font-size: 0.85rem;
+    }
+    
+    .line-badge {
+        font-weight: bold;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.8rem;
+        min-width: 40px;
+        text-align: center;
+    }
+    
+    .line-bus { background-color: #dc3545; color: white; }
+    .line-tram { background-color: #fd7e14; color: white; }
+    .line-metro { background-color: #0d6efd; color: white; }
+    .line-train { background-color: #28a745; color: white; }
+    .line-default { background-color: #6c757d; color: white; }
+    
+    .countdown-time {
+        font-weight: bold;
+        color: #0d6efd;
+        font-size: 0.9rem;
+    }
+    
+    .countdown-urgent {
+        color: #dc3545;
+        animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    
+    .realtime-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #28a745;
+        display: inline-block;
+        margin-left: 0.5rem;
+    }
+    
+    .demo-indicator {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background-color: #ffc107;
+        color: #000;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 0.5rem;
+        font-size: 0.7rem;
+        font-weight: bold;
+    }
+    
+    .search-container {
+        position: relative;
+    }
+    
+    .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 0.375rem 0.375rem;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+    }
+    
+    .search-result-item {
+        padding: 0.75rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f8f9fa;
+    }
+    
+    .search-result-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .search-result-item:last-child {
+        border-bottom: none;
+    }
+    
+    .last-updated {
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-align: center;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background-color: #f8f9fa;
+    }
+    
+    .no-departures {
+        text-align: center;
+        color: #6c757d;
+        padding: 2rem;
+        font-style: italic;
+    }
+    
+    .loading-spinner {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 2rem;
+    }
+    
+    .spinner-border-sm {
+        width: 1rem;
+        height: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2><i class="fas fa-subway me-2"></i>WL Ticker Dashboard</h2>
+        <p class="text-muted">Live Abfahrtszeiten der Wiener Linien</p>
+    </div>
+</div>
+
+<!-- Add Station Section -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-plus me-2"></i>Neue Haltestelle hinzufügen
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="search-container">
+                    <div class="input-group">
+                        <input type="text" 
+                               class="form-control" 
+                               id="station-search" 
+                               placeholder="Haltestellenname eingeben..."
+                               autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" id="clear-search">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="search-results" class="search-results"></div>
+                </div>
+                <small class="form-text text-muted mt-2">
+                    Geben Sie mindestens 2 Zeichen ein, um nach Haltestellen zu suchen.
+                </small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Informationen
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li><i class="fas fa-clock text-primary me-2"></i>Automatische Aktualisierung alle 3 Minuten</li>
+                    <li><i class="fas fa-circle text-success me-2" style="font-size: 0.5rem;"></i>Grüner Punkt = Echtzeitdaten</li>
+                    <li><i class="fas fa-subway text-info me-2"></i>Getrennte Spalten für beide Richtungen</li>
+                    <li><i class="fas fa-trash text-danger me-2"></i>Karten per Klick entfernen</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stations Dashboard -->
+<div class="row" id="stations-container">
+    {% if stations %}
+        {% for station in stations %}
+        <div class="col-md-6 col-lg-6 mb-4" data-station-id="{{ station.id }}">
+            <div class="card station-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-map-marker-alt me-1"></i>
+                        {{ station.station_name }}
+                    </h6>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary me-2" 
+                                onclick="refreshStation({{ station.id }})"
+                                title="Daten aktualisieren">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" 
+                                onclick="removeStation({{ station.id }})"
+                                title="Haltestelle entfernen">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="departures-container" id="departures-{{ station.id }}">
+                        <div class="loading-spinner">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                <span class="visually-hidden">Lade...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="last-updated" id="updated-{{ station.id }}">
+                    Wird geladen...
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle me-2"></i>
+                Noch keine Haltestellen hinzugefügt. Verwenden Sie die Suche oben, um Ihre ersten Haltestellen hinzuzufügen.
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+class WLTicker {
+    constructor() {
+        this.searchTimeout = null;
+        this.updateInterval = null;
+        this.init();
+    }
+    
+    init() {
+        this.setupEventListeners();
+        this.startAutoUpdate();
+        this.loadAllDepartures();
+    }
+    
+    setupEventListeners() {
+        const searchInput = document.getElementById('station-search');
+        const clearButton = document.getElementById('clear-search');
+        
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.handleSearch(e.target.value);
+            });
+            
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.hideSearchResults();
+                }
+            });
+        }
+        
+        if (clearButton) {
+            clearButton.addEventListener('click', () => {
+                if (searchInput) {
+                    searchInput.value = '';
+                }
+                this.hideSearchResults();
+            });
+        }
+        
+        // Hide search results when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-container')) {
+                this.hideSearchResults();
+            }
+        });
+    }
+    
+    handleSearch(query) {
+        clearTimeout(this.searchTimeout);
+        
+        if (query.length < 2) {
+            this.hideSearchResults();
+            return;
+        }
+        
+        this.searchTimeout = setTimeout(() => {
+            this.searchStations(query);
+        }, 300);
+    }
+    
+    async searchStations(query) {
+        try {
+            const response = await fetch('/wl_ticker/search_stations?q=' + encodeURIComponent(query));
+            const data = await response.json();
+            this.displaySearchResults(data.results);
+        } catch (error) {
+            console.error('Search error:', error);
+        }
+    }
+    
+    displaySearchResults(results) {
+        const container = document.getElementById('search-results');
+        if (!container) return;
+        
+        if (results.length === 0) {
+            container.innerHTML = '<div class="search-result-item">Keine Haltestellen gefunden</div>';
+        } else {
+            container.innerHTML = results.map(station => 
+                '<div class="search-result-item" onclick="wlTicker.addStation(\'' + station.station_name + '\', ' + station.stop_id + ')">' +
+                    '<strong>' + station.station_name + '</strong>' +
+                    '<small class="text-muted d-block">Ähnlichkeit: ' + station.similarity_score + '%</small>' +
+                '</div>'
+            ).join('');
+        }
+        
+        container.style.display = 'block';
+    }
+    
+    hideSearchResults() {
+        const container = document.getElementById('search-results');
+        if (container) {
+            container.style.display = 'none';
+        }
+    }
+    
+    async addStation(stationName, stopId) {
+        try {
+            const response = await fetch('/wl_ticker/add_station', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    station_name: stationName,
+                    stop_id: stopId
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || 'Fehler beim Hinzufügen der Haltestelle');
+            }
+        } catch (error) {
+            console.error('Error adding station:', error);
+            alert('Fehler beim Hinzufügen der Haltestelle');
+        }
+        
+        this.hideSearchResults();
+        const searchInput = document.getElementById('station-search');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+    }
+    
+    async removeStation(stationId) {
+        if (!confirm('Haltestelle wirklich entfernen?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/wl_ticker/remove_station/' + stationId, {
+                method: 'DELETE'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const stationElement = document.querySelector('[data-station-id="' + stationId + '"]');
+                if (stationElement) {
+                    stationElement.remove();
+                }
+                
+                // Show info message if no stations left
+                if (document.querySelectorAll('[data-station-id]').length === 0) {
+                    document.getElementById('stations-container').innerHTML = 
+                        '<div class="col-12">' +
+                            '<div class="alert alert-info text-center">' +
+                                '<i class="fas fa-info-circle me-2"></i>' +
+                                'Noch keine Haltestellen hinzugefügt. Verwenden Sie die Suche oben, um Ihre ersten Haltestellen hinzuzufügen.' +
+                            '</div>' +
+                        '</div>';
+                }
+            } else {
+                alert(data.message || 'Fehler beim Entfernen der Haltestelle');
+            }
+        } catch (error) {
+            console.error('Error removing station:', error);
+            alert('Fehler beim Entfernen der Haltestelle');
+        }
+    }
+    
+    async loadAllDepartures() {
+        try {
+            // Don't load all at once - use staggered loading
+            const stationElements = document.querySelectorAll('[data-station-id]');
+            
+            if (stationElements.length === 0) return;
+            
+            // Load stations one by one with delays
+            for (let i = 0; i < stationElements.length; i++) {
+                const stationElement = stationElements[i];
+                const stationId = stationElement.getAttribute('data-station-id');
+                
+                // Add delay between stations (3-6 seconds)
+                if (i > 0) {
+                    const delay = 3000 + Math.random() * 3000; // 3-6 seconds
+                    console.log('Waiting ' + Math.round(delay/1000) + ' seconds before loading next station...');
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+                
+                console.log('Loading departures for station ' + stationId + ' (' + (i + 1) + '/' + stationElements.length + ')');
+                await this.loadSingleStationDepartures(stationId);
+            }
+        } catch (error) {
+            console.error('Error loading departures:', error);
+        }
+    }
+    
+    async loadSingleStationDepartures(stationId) {
+        try {
+            const response = await fetch('/wl_ticker/departures/' + stationId);
+            const data = await response.json();
+            
+            if (data.error) {
+                console.error('Error for station ' + stationId + ':', data.error);
+                return;
+            }
+            
+            this.updateStationDepartures(stationId, data);
+        } catch (error) {
+            console.error('Error loading station ' + stationId + ':', error);
+        }
+    }
+    
+    updateStationDepartures(stationId, stationData) {
+        const container = document.getElementById('departures-' + stationId);
+        const updatedElement = document.getElementById('updated-' + stationId);
+        
+        if (!container) return;
+        
+        console.log('Updating station ' + stationId + ' with ' + stationData.departures.length + ' departures');
+        
+        // Log all lines found for debugging
+        const allLines = stationData.departures.map(dep => dep.line);
+        const uniqueLines = [...new Set(allLines)];
+        console.log('Lines found: ' + uniqueLines.join(', '));
+        
+        if (stationData.departures.length === 0) {
+            container.innerHTML = '<div class="no-departures">Keine Abfahrten in den nächsten 2 Stunden</div>';
+        } else {
+            // Group by LINE + DIRECTION combination (not just direction)
+            const lineDirectionGroups = this.groupByLineAndDirection(stationData.departures);
+            const lineDirectionKeys = Object.keys(lineDirectionGroups);
+            
+            console.log('Line-Direction combinations found: ' + lineDirectionKeys.join(', '));
+            
+            if (lineDirectionKeys.length === 0) {
+                container.innerHTML = '<div class="no-departures">Keine Abfahrten verfügbar</div>';
+                return;
+            }
+            
+            // Create individual cards for each line-direction combination
+            let html = '<div class="line-direction-grid">';
+            
+            for (let i = 0; i < lineDirectionKeys.length; i++) {
+                const key = lineDirectionKeys[i];
+                const departures = lineDirectionGroups[key];
+                const firstDep = departures[0];
+                
+                html += 
+                    '<div class="line-direction-card">' +
+                        '<div class="line-direction-header">' +
+                            '<span class="line-badge-large ' + this.getLineBadgeClass(firstDep.line) + '">' + firstDep.line + '</span>' +
+                            '<div class="direction-text">' + this.formatDirectionHeader(firstDep.direction) + '</div>' +
+                        '</div>' +
+                        '<div class="departures-list">' +
+                            this.renderDeparturesForLineDirection(departures) +
+                        '</div>' +
+                    '</div>';
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        if (updatedElement) {
+            const totalDepartures = stationData.departures.length;
+            const lineDirectionCount = Object.keys(this.groupByLineAndDirection(stationData.departures)).length;
+            const hasDemo = stationData.departures.some(dep => dep.is_demo);
+            const demoText = hasDemo ? ' • Demo-Daten' : '';
+            updatedElement.textContent = 'Aktualisiert: ' + stationData.last_updated + ' • ' + totalDepartures + ' Abfahrten • ' + lineDirectionCount + ' Linien-Richtungen' + demoText;
+        }
+    }
+    
+    groupByLineAndDirection(departures) {
+        console.log('Grouping ' + departures.length + ' total departures...');
+        
+        const grouped = {};
+        departures.forEach((dep, index) => {
+            // Create key from LINE + DIRECTION (not just direction)
+            const key = dep.line + '_' + dep.direction;
+            console.log('Departure ' + index + ': ' + dep.line + ' → ' + dep.direction + ' in ' + dep.countdown + ' min (key: ' + key + ')');
+            
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(dep);
+        });
+        
+        // Log group sizes
+        Object.keys(grouped).forEach(key => {
+            console.log('Group ' + key + ': ' + grouped[key].length + ' departures');
+        });
+        
+        // Sort each group by countdown
+        Object.keys(grouped).forEach(key => {
+            grouped[key].sort((a, b) => a.countdown - b.countdown);
+            console.log('Sorted ' + key + ' departures by countdown');
+        });
+        
+        return grouped;
+    }
+    
+    renderDeparturesForLineDirection(departures) {
+        if (departures.length === 0) {
+            return '<div class="no-departures-direction">Keine Abfahrten</div>';
+        }
+        
+        console.log('Rendering ' + departures.length + ' departures for line-direction');
+        
+        const maxDepartures = 8; // Show max 8 departures per card
+        const limitedDepartures = departures.slice(0, maxDepartures);
+        
+        console.log('Limited to ' + limitedDepartures.length + ' departures');
+        
+        const html = limitedDepartures.map(dep => {
+            console.log('Rendering departure: ' + dep.line + ' in ' + dep.countdown + ' min');
+            return '<div class="departure-time-item">' +
+                '<span class="countdown-time ' + (dep.countdown <= 2 ? 'countdown-urgent' : '') + '">' + dep.time_display + '</span>' +
+                (dep.realtime ? '<span class="realtime-indicator" title="Echtzeitdaten"></span>' : '') +
+                (dep.is_demo ? '<span class="demo-indicator" title="Demo-Daten">D</span>' : '') +
+                (dep.platform ? '<small class="platform-info">Steig ' + dep.platform + '</small>' : '') +
+            '</div>';
+        }).join('');
+        
+        console.log('Generated HTML length: ' + html.length);
+        return html;
+    }
+    
+    groupAndSortDepartures(departures) {
+        // Group by direction
+        const byDirection = this.groupDeparturesByDirection(departures);
+        
+        // Sort within each direction
+        Object.keys(byDirection).forEach(direction => {
+            byDirection[direction].sort((a, b) => {
+                // Sort by line type priority first
+                const lineOrderA = this.getLineTypePriority(a.line);
+                const lineOrderB = this.getLineTypePriority(b.line);
+                
+                if (lineOrderA !== lineOrderB) {
+                    return lineOrderA - lineOrderB;
+                }
+                
+                // Then by line number
+                const lineCompare = this.compareLineNames(a.line, b.line);
+                if (lineCompare !== 0) {
+                    return lineCompare;
+                }
+                
+                // Finally by countdown
+                return a.countdown - b.countdown;
+            });
+        });
+        
+        // Sort directions by number of departures (most important first)
+        const sortedDirections = Object.keys(byDirection).sort((a, b) => {
+            return byDirection[b].length - byDirection[a].length;
+        });
+        
+        const result = {};
+        sortedDirections.forEach(direction => {
+            result[direction] = byDirection[direction];
+        });
+        
+        return result;
+    }
+    
+    groupDeparturesByDirection(departures) {
+        const grouped = {};
+        departures.forEach(dep => {
+            const direction = dep.direction;
+            if (!grouped[direction]) {
+                grouped[direction] = [];
+            }
+            grouped[direction].push(dep);
+        });
+        return grouped;
+    }
+    
+    getLineTypePriority(line) {
+        if (line.startsWith('U')) return 1; // U-Bahn
+        if (line.startsWith('S')) return 2; // S-Bahn
+        if (line.match(/^\d+$/)) return 3; // Tram
+        if (line.match(/^[0-9]+[AB]$/)) return 4; // Bus
+        return 5; // Other
+    }
+    
+    compareLineNames(lineA, lineB) {
+        const getLineNumber = (line) => {
+            const match = line.match(/^[A-Z]*(\d+)/);
+            return match ? parseInt(match[1]) : 999;
+        };
+        
+        const numA = getLineNumber(lineA);
+        const numB = getLineNumber(lineB);
+        
+        if (numA !== numB) {
+            return numA - numB;
+        }
+        
+        return lineA.localeCompare(lineB);
+    }
+    
+    formatDirectionHeader(direction) {
+        if (direction.length > 20) {
+            const words = direction.split(' ');
+            if (words.length > 2) {
+                return words.slice(-2).join(' ');
+            }
+            return direction.substring(0, 20) + '...';
+        }
+        return direction;
+    }
+    
+    renderDeparturesForDirection(departures) {
+        if (departures.length === 0) {
+            return '<div class="no-departures-direction">Keine Abfahrten</div>';
+        }
+        
+        const maxDepartures = 12; // Increased to show more variants
+        const limitedDepartures = departures.slice(0, maxDepartures);
+        
+        return limitedDepartures.map(dep => 
+            '<div class="departure-item">' +
+                '<div class="d-flex align-items-center">' +
+                    '<span class="line-badge ' + this.getLineBadgeClass(dep.line) + '">' + dep.line + '</span>' +
+                    '<div class="ms-2">' +
+                        (dep.platform ? '<small class="text-muted">Steig ' + dep.platform + '</small>' : '') +
+                        (dep.route_variant && dep.route_variant !== dep.platform ? 
+                            '<small class="text-muted d-block">' + dep.route_variant + '</small>' : '') +
+                    '</div>' +
+                '</div>' +
+                '<div class="d-flex align-items-center">' +
+                    '<span class="countdown-time ' + (dep.countdown <= 2 ? 'countdown-urgent' : '') + '">' + dep.time_display + '</span>' +
+                    (dep.realtime ? '<span class="realtime-indicator" title="Echtzeitdaten"></span>' : '') +
+                    (dep.is_demo ? '<span class="demo-indicator" title="Demo-Daten">D</span>' : '') +
+                '</div>' +
+            '</div>'
+        ).join('');
+    }
+    
+    getLineBadgeClass(lineNumber) {
+        if (lineNumber.startsWith('U')) return 'line-metro';
+        if (lineNumber.match(/^\d+[AB]?$/)) return 'line-tram';
+        if (lineNumber.match(/^[0-9]{2,3}[AB]?$/)) return 'line-bus';
+        if (lineNumber.startsWith('S')) return 'line-train';
+        return 'line-default';
+    }
+    
+    startAutoUpdate() {
+        // Longer intervals to reduce API pressure
+        this.updateInterval = setInterval(() => {
+            console.log('Starting staggered refresh of all stations...');
+            this.loadAllDepartures();
+        }, 180000); // Update every 3 minutes instead of 30 seconds
+    }
+    
+    stopAutoUpdate() {
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+        }
+    }
+}
+
+// Global functions
+function removeStation(stationId) {
+    if (window.wlTicker) {
+        window.wlTicker.removeStation(stationId);
+    }
+}
+
+function refreshStation(stationId) {
+    if (window.wlTicker) {
+        console.log('Manual refresh for station ' + stationId);
+        window.wlTicker.loadSingleStationDepartures(stationId);
+    }
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    window.wlTicker = new WLTicker();
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    if (window.wlTicker) {
+        window.wlTicker.stopAutoUpdate();
+    }
+});
+</script>
+{% endblock %}

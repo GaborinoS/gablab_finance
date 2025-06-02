@@ -10,3 +10,5 @@ numpy==1.24.3
 plotly==5.15.0
 python-dotenv==1.0.0
 yfinance
+fuzzywuzzy>=0.18.0
+python-levenshtein>=0.12.2

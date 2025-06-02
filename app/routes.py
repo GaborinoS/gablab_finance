@@ -47,6 +47,12 @@ def home():
                 'url': '/odoo',
                 'icon': 'plug'
             }
+            ,{
+                'name': 'WL Ticker',
+                'description': 'Live Abfahrtszeiten der Wiener Linien',
+                'icon': 'subway',
+                'url': url_for('wl_ticker.index')
+            }
         ]
     return render_template('home.html', modules=modules)
 

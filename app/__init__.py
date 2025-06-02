@@ -43,6 +43,10 @@ def create_app(config_class=Config):
         # Register odoo module
     from app.modules.odoo import bp as odoo_bp
     app.register_blueprint(odoo_bp, url_prefix='/odoo')
+
+        # Register blueprints
+    from app.modules.wl_ticker import bp as wl_ticker_bp
+    app.register_blueprint(wl_ticker_bp, url_prefix='/wl_ticker')
     
     # Create database tables - only needed for development
     with app.app_context():
